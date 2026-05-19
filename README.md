@@ -1,240 +1,332 @@
 # D Transcreate Skill
 
-Version: 0.1.0
+**Production-grade translation and transcreation workflow for AI agents.**
 
-An agent-agnostic skill pack for translating and transcreating long documents with
-controlled terminology, consistent voice, and durable state across context windows.
+Version: **0.2.0**<br>
+License: **PolyForm Noncommercial 1.0.0**<br>
+Status: **Ready to use for noncommercial projects**
 
-Supports fiction, technical manuals, legal/policy material, scripts, subtitles, and
-mixed-format sources. Works with Codex, Claude Code, Cursor, OpenCode, and any
-generic agent that reads instruction files.
+D Transcreate Skill turns a general-purpose coding agent into a disciplined
+translation/transcreation operator for long-form, high-stakes documents. It is
+built for projects where quality depends on more than sentence-by-sentence
+translation: terminology control, register, continuity, chunk planning,
+fidelity review, formatting preservation, and resumable state.
 
-## Repository Layout
+It works across multiple agent platforms while keeping one canonical workflow in
+`core/`.
 
-```
+## Why this exists
+
+Long documents fail in AI translation when the agent loses global context,
+invents terminology, changes character voice, drops details, or cannot resume
+cleanly after a context reset. This pack solves those problems by making the
+agent operate through durable artifacts:
+
+- a translation brief before work begins;
+- source maps and chunk manifests before translation;
+- glossaries, style sheets, story bibles, and domain maps as shared memory;
+- per-chunk summaries for resumability;
+- mandatory QA gates before delivery.
+
+## Best for
+
+- Books, fiction, web novels, scripts, subtitles, and dialogue-heavy material.
+- Technical manuals, API docs, product documentation, and developer guides.
+- Legal, policy, compliance, and other terminology-sensitive documents.
+- Mixed-format sources where structure, code blocks, variables, tables, links,
+  and citations must be preserved.
+- Any project that needs faithful translation with controlled transcreation.
+
+## Supported agent platforms
+
+| Platform | Adapter path | Entry point |
+|---|---|---|
+| OpenAI Codex | `adapters/codex/` | `SKILL.md` |
+| Claude Code | `adapters/claude-code/` | `.claude/skills/d-transcreate/SKILL.md` |
+| Cursor | `adapters/cursor/` | `.cursor/rules/d-transcreate.mdc` |
+| OpenCode | `adapters/opencode/` | `opencode.json` |
+| Generic agents | `adapters/generic/` | `d-transcreate.md` |
+
+## What is included
+
+```text
 d-transcreate-skill/
 ├── core/                    # Single source of truth
-│   ├── d-transcreate.md     # Canonical entrypoint (≤ 200 lines)
+│   ├── d-transcreate.md     # Canonical entrypoint
 │   ├── workflows/           # 7 workflow guides
 │   ├── schemas/             # 10 artifact schemas
 │   └── prompts/             # 7 subagent role prompts
-├── adapters/                # Platform-specific template layouts
-│   ├── codex/               # OpenAI Codex adapter
-│   ├── claude-code/         # Claude Code adapter
-│   ├── cursor/              # Cursor adapter
-│   ├── opencode/            # OpenCode adapter
-│   └── generic/             # Any agent (no tool-specific syntax)
-├── examples/                # Runnable example bundles
-│   ├── fiction-short/       # Fiction translation demo
-│   ├── technical-manual/    # Technical manual demo
-│   └── legal-policy/        # Legal/policy demo
-├── scripts/                 # Maintainer tooling
-│   ├── validate_pack.py     # Repository integrity checks
-│   └── build_adapters.py    # Install adapter into consumer project
-├── README.md                # This file (bilingual EN/VI)
-└── AGENTS.md                # Generic-agent bootstrap
+├── adapters/                # Platform-specific thin wrappers
+├── examples/                # Fiction, technical, and legal/policy examples
+├── scripts/                 # Validation and adapter build tooling
+├── tests/                   # Smoke tests for packaging and validation
+├── AGENTS.md                # Generic-agent bootstrap
+├── CHANGELOG.md             # Release notes
+├── LICENSE                  # Noncommercial license terms
+└── VERSION                  # Current version
 ```
 
-## Quick Start
+## Core workflow
 
-### For Translation Agents
+Every serious translation job follows the same seven phases:
 
-1. Identify your platform adapter under `adapters/`.
-2. Read the adapter entrypoint (e.g., `SKILL.md`, `CLAUDE.md`, or `AGENTS.md`).
-3. Follow the pointer to `core/d-transcreate.md` for the canonical workflow.
-4. Execute the seven-phase workflow: Intake → Scan → Research → Plan → Translate → Merge → QA.
+1. **Intake** — define source, target, audience, register, quality bar, and constraints.
+2. **Scan** — inspect the whole document before translating any chunk.
+3. **Research** — establish terminology, style, domain rules, and continuity facts.
+4. **Plan** — segment the source into semantic chunks and create a manifest.
+5. **Translate** — draft, compare, revise, and summarize each chunk.
+6. **Coordinate** — merge chunks, resolve conflicts, and run a unified voice pass.
+7. **QA** — run fidelity, terminology, language-quality, continuity, data, and formatting gates.
 
-### For Maintainers
+The canonical entry point is `core/d-transcreate.md`.
 
-1. Edit content only under `core/`. Adapters are thin pointers — never duplicate workflow text.
-2. Validate after every change:
-   ```bash
-   python scripts/validate_pack.py .
-   ```
-3. Run the smoke tests:
-   ```bash
-   python tests/test_pack.py
-   ```
-4. Build an adapter into a consumer project:
-   ```bash
-   python scripts/build_adapters.py --platform <name> --dest <path>
-   ```
-5. Validate the installed destination:
-   ```bash
-   python scripts/validate_pack.py <path>
-   ```
+## Install an adapter into a consumer project
 
-## Versioning
-
-This skill pack follows semantic versioning. The current version is recorded in
-`VERSION`; release notes are recorded in `CHANGELOG.md`.
-
-## Validation and Build Commands
-
-### Validate the repository
+From the repository root:
 
 ```bash
-python scripts/validate_pack.py .
+python3 scripts/build_adapters.py \
+  --platform <codex|claude-code|cursor|opencode|generic> \
+  --dest <path-to-consumer-project>
 ```
 
-Options:
-- `--line-budget N` — Maximum lines for adapter entrypoints (default: 200)
-- `--duplication-threshold N` — Warn on duplicated blocks of N+ lines (default: 20)
-- `--json` — Machine-readable JSON output
+Common options:
 
-Exit code is non-zero on any error. Warnings (duplication, language ratio) do not fail.
+- `--mode copy` — copy files into the destination project (default).
+- `--mode symlink` — symlink files for local development.
+- `--mode dry-run` — preview the install without writing files.
+- `--core-strategy copy` — install the canonical `core/` directory into the destination (default).
+- `--core-strategy reference --shared-core-path <path>` — keep one shared `core/` and rewrite adapter references.
+- `--force` — overwrite existing destination files.
 
-### Build an adapter into a project
+Each install writes `.d-transcreate-manifest.json` with the target platform,
+pack version, source commit, install options, and file hashes.
+
+## Use the skill as an agent
+
+1. Open the adapter entry point for your platform.
+2. Follow its pointer to `core/d-transcreate.md`.
+3. Create the required artifacts before translating:
+   - `translation-brief.md`
+   - `source-map.md`
+   - `glossary.md`
+   - `style-sheet.md`
+   - `chunk-manifest.md`
+4. Add `story-bible.md` for narrative work or `domain-map.md` for technical/legal work.
+5. Translate chunk-by-chunk and persist chunk summaries.
+6. Run the QA gates before presenting the final output.
+
+## Validate the pack
+
+Run these checks before every release:
 
 ```bash
-python scripts/build_adapters.py --platform <codex|claude-code|cursor|opencode|generic> --dest <path>
+python3 -m py_compile scripts/validate_pack.py scripts/build_adapters.py tests/test_pack.py
+python3 scripts/validate_pack.py .
+python3 tests/test_pack.py
 ```
 
-Options:
-- `--mode <copy|symlink|dry-run>` — Installation mode (default: copy)
-- `--core-strategy <copy|reference>` — How to handle core files (default: copy)
-- `--shared-core-path <path>` — Path to shared core when using reference strategy
-- `--force` — Overwrite existing files at destination
+The validator checks required files, adapter frontmatter, internal links,
+placeholder markers, core references, line budgets, duplicated adapter text,
+UTF-8 readability, schema references, example READMEs, and install manifests.
 
-The build script produces a `.d-transcreate-manifest.json` at the destination.
+Machine-readable output is available with:
 
-## Maintainer Update Workflow
+```bash
+python3 scripts/validate_pack.py . --json
+```
 
-1. Make changes under `core/` (workflows, schemas, or prompts).
-2. Run `python scripts/validate_pack.py .` to catch broken links, missing files, or budget violations.
-3. Run `python tests/test_pack.py` to verify adapter builds, destination validation, conflicts, and frontmatter checks.
-4. If adapters need updating (rare — they are pointers), edit under `adapters/<platform>/`.
-5. Re-validate.
-6. To propagate changes to consumer projects, re-run `build_adapters.py` for each installed destination.
+## Release checklist
 
-## Design Principles
+- [ ] `VERSION` contains the intended release version.
+- [ ] `CHANGELOG.md` has a dated entry for the release.
+- [ ] `python3 scripts/validate_pack.py .` passes with zero errors.
+- [ ] `python3 tests/test_pack.py` passes.
+- [ ] All five adapters build and validate.
+- [ ] License terms match the intended distribution policy.
 
-- **Single source of truth** — All workflow logic lives once under `core/`.
-- **Mirrored install layout** — Adapter paths match destination project paths.
-- **Artifact-as-state** — Decisions persist as workspace files, never in chat history.
-- **Progressive disclosure** — Entrypoints are short; details load lazily.
-- **Copyright safety** — Existing translations inform style only; no extended reproduction.
+## Design principles
+
+- **Single source of truth** — workflow logic lives once under `core/`.
+- **Thin adapters** — platform files point to the canonical workflow instead of duplicating it.
+- **Artifacts as state** — decisions are stored in files, not ephemeral chat history.
+- **Context-safe operation** — chunking and summaries make long projects resumable.
+- **Fidelity first** — meaning, structure, facts, and register come before surface fluency.
+- **Copyright safety** — existing translations may inform terminology or style only; do not copy them.
 
 ## License
 
-MIT. See `LICENSE` file.
+This project is licensed under **PolyForm Noncommercial License 1.0.0**.
+
+You may use, copy, modify, and redistribute this software for noncommercial
+purposes. Commercial use is not permitted without a separate commercial license
+from the copyright holder.
+
+See `LICENSE` for the full terms.
 
 ---
 
 # D Transcreate Skill (Tiếng Việt)
 
-Phiên bản: 0.1.0
+**Workflow dịch và chuyển ngữ chuyên nghiệp cho AI agent.**
 
-Bộ skill dịch và chuyển ngữ (transcreate) tài liệu dài, dùng được với mọi AI agent.
-Hỗ trợ fiction, tài liệu kỹ thuật, pháp lý/chính sách, kịch bản, phụ đề, và tài liệu
-hỗn hợp định dạng.
+Phiên bản: **0.2.0**<br>
+Giấy phép: **PolyForm Noncommercial 1.0.0**<br>
+Trạng thái: **Sẵn sàng dùng cho dự án phi thương mại**
 
-## Cấu trúc thư mục
+D Transcreate Skill biến một coding agent tổng quát thành một operator dịch/
+chuyển ngữ có quy trình chặt chẽ cho tài liệu dài và tài liệu đòi hỏi chất
+lượng cao. Pack này tập trung vào những yếu tố làm nên bản dịch tốt: thuật ngữ
+nhất quán, giọng văn, continuity, chia chunk, kiểm tra fidelity, giữ formatting,
+và khả năng resume sau khi context bị reset.
 
-```
+Pack hỗ trợ nhiều nền tảng agent nhưng chỉ duy trì một workflow chuẩn trong
+`core/`.
+
+## Vì sao cần pack này
+
+Dịch tài liệu dài bằng AI thường hỏng vì agent mất context tổng thể, tự chế
+thuật ngữ, đổi giọng nhân vật, bỏ sót ý, hoặc không resume sạch sau khi hết
+context. Pack này giải quyết bằng cách bắt agent làm việc qua các artifact bền
+vững:
+
+- translation brief trước khi bắt đầu;
+- source map và chunk manifest trước khi dịch;
+- glossary, style sheet, story bible, domain map làm bộ nhớ chung;
+- summary từng chunk để resume;
+- QA gates bắt buộc trước khi giao bản cuối.
+
+## Phù hợp cho
+
+- Sách, fiction, web novel, kịch bản, phụ đề, và nội dung nhiều hội thoại.
+- Manual kỹ thuật, API docs, product docs, developer guides.
+- Tài liệu pháp lý, chính sách, compliance, và tài liệu nhạy cảm về thuật ngữ.
+- Source hỗn hợp định dạng cần giữ cấu trúc, code block, biến, bảng, link, citation.
+- Dự án cần dịch faithful nhưng vẫn transcreate có kiểm soát khi cần.
+
+## Nền tảng hỗ trợ
+
+| Nền tảng | Adapter | Entry point |
+|---|---|---|
+| OpenAI Codex | `adapters/codex/` | `SKILL.md` |
+| Claude Code | `adapters/claude-code/` | `.claude/skills/d-transcreate/SKILL.md` |
+| Cursor | `adapters/cursor/` | `.cursor/rules/d-transcreate.mdc` |
+| OpenCode | `adapters/opencode/` | `opencode.json` |
+| Agent bất kỳ | `adapters/generic/` | `d-transcreate.md` |
+
+## Bên trong có gì
+
+```text
 d-transcreate-skill/
-├── core/                    # Nguồn duy nhất (single source of truth)
-│   ├── d-transcreate.md     # Entrypoint chính (≤ 200 dòng)
+├── core/                    # Nguồn chuẩn duy nhất
+│   ├── d-transcreate.md     # Entrypoint canonical
 │   ├── workflows/           # 7 hướng dẫn workflow
 │   ├── schemas/             # 10 schema artifact
 │   └── prompts/             # 7 prompt cho subagent
-├── adapters/                # Template theo từng nền tảng
-│   ├── codex/               # OpenAI Codex
-│   ├── claude-code/         # Claude Code
-│   ├── cursor/              # Cursor
-│   ├── opencode/            # OpenCode
-│   └── generic/             # Agent bất kỳ
-├── examples/                # Ví dụ chạy được
-│   ├── fiction-short/       # Demo dịch fiction
-│   ├── technical-manual/    # Demo dịch kỹ thuật
-│   └── legal-policy/        # Demo dịch pháp lý
-├── scripts/                 # Công cụ cho maintainer
-│   ├── validate_pack.py     # Kiểm tra tính toàn vẹn repo
-│   └── build_adapters.py    # Cài adapter vào project đích
-├── README.md                # File này (song ngữ EN/VI)
-└── AGENTS.md                # Bootstrap cho agent
+├── adapters/                # Wrapper mỏng theo nền tảng
+├── examples/                # Ví dụ fiction, kỹ thuật, pháp lý/chính sách
+├── scripts/                 # Công cụ validate và build adapter
+├── tests/                   # Smoke test cho packaging và validation
+├── AGENTS.md                # Bootstrap cho generic agent
+├── CHANGELOG.md             # Ghi chú phát hành
+├── LICENSE                  # Điều khoản phi thương mại
+└── VERSION                  # Phiên bản hiện tại
 ```
 
-## Bắt đầu nhanh
+## Workflow chính
 
-### Dành cho AI Agent
+Mỗi job dịch nghiêm túc đi qua 7 phase:
 
-1. Tìm adapter phù hợp nền tảng của bạn trong `adapters/`.
-2. Đọc entrypoint của adapter (ví dụ: `SKILL.md`, `CLAUDE.md`, hoặc `AGENTS.md`).
-3. Theo con trỏ đến `core/d-transcreate.md` để đọc workflow chính.
-4. Thực hiện 7 phase: Intake → Quét → Nghiên cứu → Lập kế hoạch → Dịch → Gộp → QA.
+1. **Intake** — xác định source, target, audience, register, quality bar, constraints.
+2. **Scan** — quét toàn tài liệu trước khi dịch bất kỳ chunk nào.
+3. **Research** — chốt thuật ngữ, style, domain rules, continuity facts.
+4. **Plan** — chia source thành chunk theo ngữ nghĩa và tạo manifest.
+5. **Translate** — draft, compare, revise, summarize từng chunk.
+6. **Coordinate** — merge chunk, xử lý conflict, thống nhất giọng văn.
+7. **QA** — kiểm tra fidelity, thuật ngữ, chất lượng ngôn ngữ, continuity, dữ liệu, formatting.
 
-### Dành cho Maintainer
+Entrypoint chuẩn là `core/d-transcreate.md`.
 
-1. Chỉ sửa nội dung trong `core/`. Adapter chỉ là con trỏ — không bao giờ copy nội dung workflow.
-2. Kiểm tra sau mỗi thay đổi:
-   ```bash
-   python scripts/validate_pack.py .
-   ```
-3. Chạy smoke test:
-   ```bash
-   python tests/test_pack.py
-   ```
-4. Cài adapter vào project đích:
-   ```bash
-   python scripts/build_adapters.py --platform <tên> --dest <đường_dẫn>
-   ```
-5. Kiểm tra project đích:
-   ```bash
-   python scripts/validate_pack.py <đường_dẫn>
-   ```
+## Cài adapter vào project dùng thật
 
-## Phiên bản
-
-Bộ skill dùng semantic versioning. Phiên bản hiện tại được ghi trong `VERSION`;
-ghi chú phát hành nằm trong `CHANGELOG.md`.
-
-## Lệnh kiểm tra và build
-
-### Kiểm tra repo
+Chạy từ root repo:
 
 ```bash
-python scripts/validate_pack.py .
+python3 scripts/build_adapters.py \
+  --platform <codex|claude-code|cursor|opencode|generic> \
+  --dest <đường-dẫn-project-đích>
 ```
 
-Tùy chọn:
-- `--line-budget N` — Giới hạn dòng cho entrypoint adapter (mặc định: 200)
-- `--duplication-threshold N` — Cảnh báo khi block trùng lặp ≥ N dòng (mặc định: 20)
-- `--json` — Xuất JSON
+Tùy chọn thường dùng:
 
-Exit code khác 0 khi có lỗi. Cảnh báo (trùng lặp, tỷ lệ ngôn ngữ) không gây fail.
+- `--mode copy` — copy file vào project đích (mặc định).
+- `--mode symlink` — symlink file để phát triển local.
+- `--mode dry-run` — xem trước mà không ghi file.
+- `--core-strategy copy` — cài cả thư mục `core/` vào project đích (mặc định).
+- `--core-strategy reference --shared-core-path <path>` — dùng chung một `core/` và rewrite reference.
+- `--force` — ghi đè file đã tồn tại.
 
-### Build adapter vào project
+Mỗi lần cài tạo `.d-transcreate-manifest.json` gồm nền tảng đích, version, commit
+nguồn, tùy chọn cài đặt, và hash file.
+
+## Cách agent dùng skill
+
+1. Mở entry point adapter đúng nền tảng.
+2. Theo con trỏ đến `core/d-transcreate.md`.
+3. Tạo các artifact bắt buộc trước khi dịch:
+   - `translation-brief.md`
+   - `source-map.md`
+   - `glossary.md`
+   - `style-sheet.md`
+   - `chunk-manifest.md`
+4. Thêm `story-bible.md` cho fiction hoặc `domain-map.md` cho kỹ thuật/pháp lý.
+5. Dịch từng chunk và lưu summary.
+6. Chạy QA gates trước khi giao bản cuối.
+
+## Validate pack
+
+Chạy các lệnh này trước mỗi release:
 
 ```bash
-python scripts/build_adapters.py --platform <codex|claude-code|cursor|opencode|generic> --dest <đường_dẫn>
+python3 -m py_compile scripts/validate_pack.py scripts/build_adapters.py tests/test_pack.py
+python3 scripts/validate_pack.py .
+python3 tests/test_pack.py
 ```
 
-Tùy chọn:
-- `--mode <copy|symlink|dry-run>` — Chế độ cài đặt (mặc định: copy)
-- `--core-strategy <copy|reference>` — Cách xử lý core (mặc định: copy)
-- `--shared-core-path <path>` — Đường dẫn core dùng chung (khi dùng reference)
-- `--force` — Ghi đè file đã tồn tại
+Validator kiểm tra file bắt buộc, frontmatter adapter, link nội bộ, placeholder,
+reference tới core, line budget, duplicate adapter text, UTF-8, schema reference,
+README của examples, và install manifest.
 
-Script tạo file `.d-transcreate-manifest.json` tại đích.
+Xuất JSON:
 
-## Quy trình cập nhật cho Maintainer
+```bash
+python3 scripts/validate_pack.py . --json
+```
 
-1. Sửa nội dung trong `core/` (workflows, schemas, hoặc prompts).
-2. Chạy `python scripts/validate_pack.py .` để phát hiện link hỏng, file thiếu, hoặc vượt giới hạn dòng.
-3. Chạy `python tests/test_pack.py` để kiểm tra build adapter, validation đích, conflict, và frontmatter.
-4. Nếu adapter cần cập nhật (hiếm khi — chúng chỉ là con trỏ), sửa trong `adapters/<platform>/`.
-5. Kiểm tra lại.
-6. Để cập nhật project đích, chạy lại `build_adapters.py` cho từng đích đã cài.
+## Checklist release
+
+- [ ] `VERSION` đúng với release dự định.
+- [ ] `CHANGELOG.md` có entry theo ngày.
+- [ ] `python3 scripts/validate_pack.py .` pass với 0 error.
+- [ ] `python3 tests/test_pack.py` pass.
+- [ ] Cả 5 adapter build và validate được.
+- [ ] License đúng chính sách phân phối mong muốn.
 
 ## Nguyên tắc thiết kế
 
-- **Nguồn duy nhất** — Toàn bộ logic workflow chỉ nằm một lần trong `core/`.
-- **Layout cài đặt phản chiếu** — Đường dẫn adapter khớp với đường dẫn project đích.
-- **Artifact-as-state** — Quyết định lưu thành file, không lưu trong chat history.
-- **Progressive disclosure** — Entrypoint ngắn; chi tiết nạp khi cần.
-- **An toàn bản quyền** — Bản dịch có sẵn chỉ dùng để học văn phong; không sao chép.
+- **Nguồn chuẩn duy nhất** — workflow logic chỉ nằm trong `core/`.
+- **Adapter mỏng** — file theo nền tảng chỉ trỏ về workflow chuẩn, không duplicate logic.
+- **Artifact là state** — quyết định lưu trong file, không phụ thuộc chat history.
+- **An toàn context** — chunking và summary giúp dự án dài resume được.
+- **Fidelity trước tiên** — nghĩa, cấu trúc, dữ kiện, register quan trọng hơn fluency bề mặt.
+- **An toàn bản quyền** — bản dịch có sẵn chỉ dùng để tham khảo thuật ngữ/style; không copy.
 
 ## Giấy phép
 
-MIT. Xem file `LICENSE`.
+Dự án dùng **PolyForm Noncommercial License 1.0.0**.
+
+Bạn có thể dùng, copy, sửa, và phân phối lại phần mềm này cho mục đích phi
+thương mại. Không được dùng thương mại nếu chưa có giấy phép thương mại riêng
+từ chủ sở hữu bản quyền.
+
+Xem `LICENSE` để biết đầy đủ điều khoản.
