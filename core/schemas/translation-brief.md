@@ -13,6 +13,7 @@ The Translation_Agent MUST populate every field below. If a required field is mi
 
 ## Source
 - Source files:
+- Skill version:
 - Source language:
 
 ## Target
@@ -47,6 +48,7 @@ The Translation_Agent MUST populate every field below. If a required field is mi
 | Field | Description | Example values |
 |---|---|---|
 | Source files | Paths or identifiers of the source document(s) to translate | `source/chapter-01.md`, `source/manual.pdf` |
+| Skill version | Version from `core/d-transcreate.md` or `VERSION`, used for auditability | `0.1.0` |
 | Source language | BCP-47 language tag or plain name of the source language | `en`, `English`, `ja` |
 | Target language | BCP-47 language tag or plain name of the target language | `vi`, `Vietnamese`, `fr` |
 | Target locale | Regional variant or market for the target language | `vi-VN`, `fr-CA`, `pt-BR` |

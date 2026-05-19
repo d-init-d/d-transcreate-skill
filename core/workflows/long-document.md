@@ -15,6 +15,7 @@ Produce a **Translation_Brief** artifact before any chunk translation begins. Th
 | Field | Decision |
 |---|---|
 | Source files | Paths, URLs, or user-provided text |
+| Skill version | Version from `core/d-transcreate.md` or `VERSION` |
 | Source language | Include dialect or variant if relevant |
 | Target language | Include locale, script, spelling standard |
 | Target locale | Regional conventions (date, number, currency, units) |
@@ -288,6 +289,7 @@ Deliver the translated artifact plus a short translator note covering:
 - Terminology choices worth reviewing
 - Known extraction or formatting limitations
 - QA checks performed (reference the QA_Report)
+- Skill version used for the work
 - Residual risks
 
 Do not include internal scratch notes unless the user asks for them.

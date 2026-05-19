@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import sys
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +27,8 @@ VALID_PLATFORMS = ("codex", "claude-code", "cursor", "opencode", "generic")
 VALID_MODES = ("copy", "symlink", "dry-run")
 VALID_CORE_STRATEGIES = ("copy", "reference")
 MANIFEST_FILENAME = ".d-transcreate-manifest.json"
+VERSION_FILENAME = "VERSION"
+METADATA_FILES = ("README.md", "LICENSE", "VERSION", "CHANGELOG.md")
 
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
@@ -40,6 +43,30 @@ EXIT_CONFLICT = 2
 def get_repo_root():
     """Return the repository root (parent of the scripts/ directory)."""
     return Path(__file__).resolve().parent.parent
+
+
+def get_pack_version(repo_root):
+    """Return the skill pack version from VERSION, or 'unknown' if unavailable."""
+    version_path = repo_root / VERSION_FILENAME
+    try:
+        version = version_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+    return version or "unknown"
+
+
+def get_source_commit(repo_root):
+    """Return the current git commit hash, or 'unknown' outside git."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return result.stdout.strip() or "unknown"
 
 
 def sha256_file(filepath):
@@ -119,13 +146,18 @@ def rewrite_core_paths_for_copy(content, rel_path):
 # ---------------------------------------------------------------------------
 
 
-def detect_conflicts(adapter_files, core_files, dest, core_strategy):
+def detect_conflicts(adapter_files, core_files, metadata_files, dest, core_strategy):
     """
     Check which destination files already exist.
     Returns a list of conflicting destination paths.
     """
     conflicts = []
     for rel_path in adapter_files:
+        dest_path = dest / rel_path
+        if dest_path.exists():
+            conflicts.append(str(rel_path))
+
+    for rel_path in metadata_files:
         dest_path = dest / rel_path
         if dest_path.exists():
             conflicts.append(str(rel_path))
@@ -139,7 +171,7 @@ def detect_conflicts(adapter_files, core_files, dest, core_strategy):
     return conflicts
 
 
-def execute_copy(adapter_dir, adapter_files, core_dir, core_files, dest,
+def execute_copy(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
                  core_strategy, shared_core_path, force):
     """
     Copy adapter files (and optionally core/) to destination.
@@ -197,10 +229,22 @@ def execute_copy(adapter_dir, adapter_files, core_dir, core_files, dest,
                 ).replace("\\", "/"),
             })
 
+    for rel_path in metadata_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+
+        file_records.append({
+            "path": str(rel_path).replace("\\", "/"),
+            "sha256": sha256_file(dst),
+            "from": str(rel_path).replace("\\", "/"),
+        })
+
     return file_records
 
 
-def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, dest,
+def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
                     core_strategy, shared_core_path, force):
     """
     Create symlinks from destination to source files.
@@ -246,10 +290,26 @@ def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, dest,
                 ).replace("\\", "/"),
             })
 
+    for rel_path in metadata_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+
+        os.symlink(src.resolve(), dst)
+
+        file_records.append({
+            "path": str(rel_path).replace("\\", "/"),
+            "sha256": sha256_file(src),
+            "from": str(rel_path).replace("\\", "/"),
+        })
+
     return file_records
 
 
-def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, dest,
+def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
                     core_strategy, shared_core_path):
     """
     Print planned operations without writing anything.
@@ -277,10 +337,22 @@ def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, dest,
             dst_display = str(dst).replace("\\", "/")
             print(f"  COPY: {src_display} -> {dst_display}")
 
+    for rel_path in metadata_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        src_display = str(src.relative_to(repo_root)).replace("\\", "/")
+        dst_display = str(dst).replace("\\", "/")
+        print(f"  COPY: {src_display} -> {dst_display}")
+
     if core_strategy == "reference" and shared_core_path:
         print(f"\n  Core references rewritten to: {shared_core_path}")
 
-    print(f"\n  Total files: {len(adapter_files) + (len(core_files) if core_strategy == 'copy' else 0)}")
+    total_files = (
+        len(adapter_files)
+        + (len(core_files) if core_strategy == "copy" else 0)
+        + len(metadata_files)
+    )
+    print(f"\n  Total files: {total_files}")
     print("  Manifest: NOT written (dry-run mode)")
 
 
@@ -296,6 +368,8 @@ def write_manifest(dest, platform, mode, core_strategy, shared_core_path,
 
     manifest = {
         "manifest_version": "1.0",
+        "pack_version": get_pack_version(repo_root),
+        "source_commit": get_source_commit(repo_root),
         "target_platform": platform,
         "mode": mode,
         "core_strategy": core_strategy,
@@ -397,6 +471,7 @@ def main():
     # Collect files
     adapter_files = collect_files(adapter_dir)
     core_files = collect_files(core_dir) if args.core_strategy == "copy" else []
+    metadata_files = [Path(p) for p in METADATA_FILES if (repo_root / p).is_file()]
 
     if not adapter_files:
         print(f"ERROR: No files found in adapter directory: {adapter_dir}",
@@ -406,7 +481,7 @@ def main():
     # Dry-run mode: print and exit
     if args.mode == "dry-run":
         execute_dry_run(
-            adapter_dir, adapter_files, core_dir, core_files, dest,
+            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
             args.core_strategy, args.shared_core_path,
         )
         sys.exit(EXIT_SUCCESS)
@@ -414,7 +489,7 @@ def main():
     # Conflict detection (skip if --force)
     if not args.force:
         conflicts = detect_conflicts(
-            adapter_files, core_files, dest, args.core_strategy,
+            adapter_files, core_files, metadata_files, dest, args.core_strategy,
         )
         if conflicts:
             print("CONFLICT: The following files already exist at the destination:",
@@ -430,12 +505,12 @@ def main():
     # Execute the operation
     if args.mode == "copy":
         file_records = execute_copy(
-            adapter_dir, adapter_files, core_dir, core_files, dest,
+            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
             args.core_strategy, args.shared_core_path, args.force,
         )
     elif args.mode == "symlink":
         file_records = execute_symlink(
-            adapter_dir, adapter_files, core_dir, core_files, dest,
+            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
             args.core_strategy, args.shared_core_path, args.force,
         )
     else:

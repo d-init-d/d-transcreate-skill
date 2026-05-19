@@ -14,6 +14,7 @@ Describe the boundaries of this QA pass.
 ## Scope
 
 - Project: <project or document title>
+- Skill version: <version from Translation_Brief>
 - Source language: <source language>
 - Target language: <target language>
 - Chunks covered: <all | list of chunk_ids>
