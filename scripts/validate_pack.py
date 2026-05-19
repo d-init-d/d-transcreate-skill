@@ -76,6 +76,41 @@ class Finding:
         return f"[{self.check_id}] {prefix}{loc}: {self.message}"
 
 
+def load_install_manifest(root: Path) -> Optional[dict]:
+    """Return the install manifest dict if present and parseable."""
+    manifest_path = root / ".d-transcreate-manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def get_referenced_core_dir(root: Path) -> Optional[Path]:
+    """Return shared core/ for reference installs, if declared and present."""
+    manifest = load_install_manifest(root)
+    if not manifest:
+        return None
+    if manifest.get("core_strategy") != "reference":
+        return None
+    shared_core_path = manifest.get("shared_core_path")
+    if not isinstance(shared_core_path, str) or not shared_core_path.strip():
+        return None
+    shared_core = Path(shared_core_path).expanduser().resolve()
+    if shared_core.is_dir():
+        return shared_core
+    return None
+
+
+def get_core_dir(root: Path) -> Optional[Path]:
+    """Return local core/ or the shared core/ for reference installs."""
+    local_core = root / "core"
+    if local_core.is_dir():
+        return local_core
+    return get_referenced_core_dir(root)
+
+
 # ---------------------------------------------------------------------------
 # Check implementations
 # ---------------------------------------------------------------------------
@@ -84,12 +119,29 @@ def check_c1_required_files(root: Path) -> List[Finding]:
     """C1: Required files exist."""
     findings: List[Finding] = []
 
-    required = [
-        "core/d-transcreate.md",
+    required_top_level = [
+        "README.md",
+        "LICENSE",
+        "VERSION",
+        "CHANGELOG.md",
     ]
 
+    for rel in required_top_level:
+        if not (root / rel).is_file():
+            findings.append(Finding("C1", "error", f"Required file missing: {rel}", rel))
+
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        manifest = load_install_manifest(root)
+        if manifest and manifest.get("core_strategy") == "reference":
+            findings.append(Finding(
+                "C1", "error",
+                "Referenced shared_core_path does not exist or is not a directory",
+                ".d-transcreate-manifest.json",
+            ))
+
     # core/workflows/*.md — at least one
-    workflows_dir = root / "core" / "workflows"
+    workflows_dir = core_dir / "workflows" if core_dir else root / "core" / "workflows"
     if workflows_dir.is_dir():
         md_files = list(workflows_dir.glob("*.md"))
         if not md_files:
@@ -98,7 +150,7 @@ def check_c1_required_files(root: Path) -> List[Finding]:
         findings.append(Finding("C1", "error", "Directory core/workflows/ does not exist"))
 
     # core/schemas/*.md — at least one
-    schemas_dir = root / "core" / "schemas"
+    schemas_dir = core_dir / "schemas" if core_dir else root / "core" / "schemas"
     if schemas_dir.is_dir():
         md_files = list(schemas_dir.glob("*.md"))
         if not md_files:
@@ -107,7 +159,7 @@ def check_c1_required_files(root: Path) -> List[Finding]:
         findings.append(Finding("C1", "error", "Directory core/schemas/ does not exist"))
 
     # core/prompts/*.md — at least one
-    prompts_dir = root / "core" / "prompts"
+    prompts_dir = core_dir / "prompts" if core_dir else root / "core" / "prompts"
     if prompts_dir.is_dir():
         md_files = list(prompts_dir.glob("*.md"))
         if not md_files:
@@ -115,10 +167,9 @@ def check_c1_required_files(root: Path) -> List[Finding]:
     else:
         findings.append(Finding("C1", "error", "Directory core/prompts/ does not exist"))
 
-    # Check individual required files
-    for rel in required:
-        if not (root / rel).is_file():
-            findings.append(Finding("C1", "error", f"Required file missing: {rel}", rel))
+    entrypoint = core_dir / "d-transcreate.md" if core_dir else root / "core" / "d-transcreate.md"
+    if not entrypoint.is_file():
+        findings.append(Finding("C1", "error", "Required file missing: core/d-transcreate.md", "core/d-transcreate.md"))
 
     return findings
 
@@ -150,6 +201,22 @@ def check_c2_frontmatter(root: Path) -> List[Finding]:
         # Check that frontmatter has at least one key
         if not fm:
             findings.append(Finding("C2", "error", "Frontmatter is empty (no key-value pairs)", rel))
+            continue
+
+        if filepath.name == "SKILL.md":
+            required_keys = ("name", "description")
+        elif filepath.suffix == ".mdc":
+            required_keys = ("description",)
+        else:
+            required_keys = ()
+
+        for key in required_keys:
+            if not fm.get(key):
+                findings.append(Finding(
+                    "C2", "error",
+                    f"Frontmatter missing required field: {key}",
+                    rel,
+                ))
 
     return findings
 
@@ -494,14 +561,18 @@ def check_c9_schema_existence(root: Path) -> List[Finding]:
     """C9: All schemas referenced in core/d-transcreate.md exist."""
     findings: List[Finding] = []
 
-    entrypoint = root / "core" / "d-transcreate.md"
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings  # C1 would catch this
+
+    entrypoint = core_dir / "d-transcreate.md"
     if not entrypoint.is_file():
         return findings  # C1 would catch this
 
     # Also check workflow and prompt files for schema references
     files_to_check: List[Path] = [entrypoint]
     for subdir in ["workflows", "prompts"]:
-        d = root / "core" / subdir
+        d = core_dir / subdir
         if d.is_dir():
             files_to_check.extend(d.rglob("*.md"))
 
@@ -516,7 +587,7 @@ def check_c9_schema_existence(root: Path) -> List[Finding]:
         for match in schema_ref_pattern.finditer(text):
             referenced_schemas.add(match.group(1))
 
-    schemas_dir = root / "core" / "schemas"
+    schemas_dir = core_dir / "schemas"
     for schema_name in sorted(referenced_schemas):
         schema_path = schemas_dir / schema_name
         if not schema_path.is_file():
@@ -577,12 +648,21 @@ def check_c11_install_manifest(root: Path) -> List[Finding]:
         return findings
 
     # Check required fields
-    required_fields = ["manifest_version", "target_platform", "files"]
+    required_fields = ["manifest_version", "pack_version", "source_commit", "target_platform", "files"]
     for field in required_fields:
         if field not in manifest:
             findings.append(Finding(
                 "C11", "error",
                 f"Install manifest missing required field: {field}",
+                ".d-transcreate-manifest.json"
+            ))
+
+    for field in ["pack_version", "source_commit"]:
+        value = manifest.get(field)
+        if not isinstance(value, str) or not value.strip():
+            findings.append(Finding(
+                "C11", "error",
+                f"Install manifest field must be a non-empty string: {field}",
                 ".d-transcreate-manifest.json"
             ))
 

@@ -1,10 +1,14 @@
 # D Transcreate — Canonical Entrypoint
 
+Version: 0.1.0
+
 Use this skill to translate or transcreate long documents with controlled terminology,
 consistent voice, and durable state across context windows.
 
 ## Operating Principles
 
+0. Record the skill version in the Translation_Brief and final QA_Report so the
+   translation can be reproduced or audited later.
 1. Preserve meaning, intent, register, structure, and factual accuracy before surface fluency.
 2. Translate literally only when literal wording carries the intended effect.
 3. Prefer natural target-language prose when idioms, humor, slogans, dialogue, or cultural references need adaptation.

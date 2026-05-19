@@ -1,5 +1,7 @@
 # D Transcreate Skill
 
+Version: 0.1.0
+
 An agent-agnostic skill pack for translating and transcreating long documents with
 controlled terminology, consistent voice, and durable state across context windows.
 
@@ -49,14 +51,23 @@ d-transcreate-skill/
    ```bash
    python scripts/validate_pack.py .
    ```
-3. Build an adapter into a consumer project:
+3. Run the smoke tests:
+   ```bash
+   python tests/test_pack.py
+   ```
+4. Build an adapter into a consumer project:
    ```bash
    python scripts/build_adapters.py --platform <name> --dest <path>
    ```
-4. Validate the installed destination:
+5. Validate the installed destination:
    ```bash
    python scripts/validate_pack.py <path>
    ```
+
+## Versioning
+
+This skill pack follows semantic versioning. The current version is recorded in
+`VERSION`; release notes are recorded in `CHANGELOG.md`.
 
 ## Validation and Build Commands
 
@@ -91,9 +102,10 @@ The build script produces a `.d-transcreate-manifest.json` at the destination.
 
 1. Make changes under `core/` (workflows, schemas, or prompts).
 2. Run `python scripts/validate_pack.py .` to catch broken links, missing files, or budget violations.
-3. If adapters need updating (rare — they are pointers), edit under `adapters/<platform>/`.
-4. Re-validate.
-5. To propagate changes to consumer projects, re-run `build_adapters.py` for each installed destination.
+3. Run `python tests/test_pack.py` to verify adapter builds, destination validation, conflicts, and frontmatter checks.
+4. If adapters need updating (rare — they are pointers), edit under `adapters/<platform>/`.
+5. Re-validate.
+6. To propagate changes to consumer projects, re-run `build_adapters.py` for each installed destination.
 
 ## Design Principles
 
@@ -105,11 +117,13 @@ The build script produces a `.d-transcreate-manifest.json` at the destination.
 
 ## License
 
-See `LICENSE` file.
+MIT. See `LICENSE` file.
 
 ---
 
 # D Transcreate Skill (Tiếng Việt)
+
+Phiên bản: 0.1.0
 
 Bộ skill dịch và chuyển ngữ (transcreate) tài liệu dài, dùng được với mọi AI agent.
 Hỗ trợ fiction, tài liệu kỹ thuật, pháp lý/chính sách, kịch bản, phụ đề, và tài liệu
@@ -157,14 +171,23 @@ d-transcreate-skill/
    ```bash
    python scripts/validate_pack.py .
    ```
-3. Cài adapter vào project đích:
+3. Chạy smoke test:
+   ```bash
+   python tests/test_pack.py
+   ```
+4. Cài adapter vào project đích:
    ```bash
    python scripts/build_adapters.py --platform <tên> --dest <đường_dẫn>
    ```
-4. Kiểm tra project đích:
+5. Kiểm tra project đích:
    ```bash
    python scripts/validate_pack.py <đường_dẫn>
    ```
+
+## Phiên bản
+
+Bộ skill dùng semantic versioning. Phiên bản hiện tại được ghi trong `VERSION`;
+ghi chú phát hành nằm trong `CHANGELOG.md`.
 
 ## Lệnh kiểm tra và build
 
@@ -199,9 +222,10 @@ Script tạo file `.d-transcreate-manifest.json` tại đích.
 
 1. Sửa nội dung trong `core/` (workflows, schemas, hoặc prompts).
 2. Chạy `python scripts/validate_pack.py .` để phát hiện link hỏng, file thiếu, hoặc vượt giới hạn dòng.
-3. Nếu adapter cần cập nhật (hiếm khi — chúng chỉ là con trỏ), sửa trong `adapters/<platform>/`.
-4. Kiểm tra lại.
-5. Để cập nhật project đích, chạy lại `build_adapters.py` cho từng đích đã cài.
+3. Chạy `python tests/test_pack.py` để kiểm tra build adapter, validation đích, conflict, và frontmatter.
+4. Nếu adapter cần cập nhật (hiếm khi — chúng chỉ là con trỏ), sửa trong `adapters/<platform>/`.
+5. Kiểm tra lại.
+6. Để cập nhật project đích, chạy lại `build_adapters.py` cho từng đích đã cài.
 
 ## Nguyên tắc thiết kế
 
@@ -213,4 +237,4 @@ Script tạo file `.d-transcreate-manifest.json` tại đích.
 
 ## Giấy phép
 
-Xem file `LICENSE`.
+MIT. Xem file `LICENSE`.
