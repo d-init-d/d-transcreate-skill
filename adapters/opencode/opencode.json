@@ -1,0 +1,5 @@
+{
+  "name": "d-transcreate",
+  "description": "Faithful translation and transcreation workflow for books, long-form documents, technical material, fiction, scripts, and mixed-format source files.",
+  "instructions": "core/d-transcreate.md"
+}

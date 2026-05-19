@@ -1,0 +1,13 @@
+term,preferred_translation,forbidden_translation,term_class,context,source_location,evidence,confidence,status,notes
+personal data,dữ liệu cá nhân,thông tin cá nhân;dữ liệu riêng tư,legal-term,data protection context,§1,Vietnamese PDPD (Nghị định 13/2023) uses 'dữ liệu cá nhân',high,approved,Consistent with Vietnamese data protection legislation
+data retention,lưu trữ dữ liệu,giữ dữ liệu;bảo quản dữ liệu,legal-term,policy section on storage duration,§3,Standard legal Vietnamese term in data governance,high,approved,
+consent,sự đồng ý,sự chấp thuận;đồng thuận,legal-term,legal basis for processing,§2,PDPD Article 11 uses 'sự đồng ý',high,approved,
+data subject,chủ thể dữ liệu,người dùng dữ liệu;đối tượng dữ liệu,legal-term,person whose data is processed,§4,PDPD terminology,high,approved,
+processing,xử lý,chế biến;gia công,legal-term,data processing activities,§2,Standard Vietnamese legal translation for data processing,high,approved,
+legitimate interest,lợi ích hợp pháp,quyền lợi chính đáng;lợi ích chính đáng,legal-term,legal basis for analytics,§2,Aligned with GDPR Vietnamese commentary,medium,approved,
+Data Protection Officer,Cán bộ Bảo vệ Dữ liệu (Data Protection Officer),Nhân viên bảo mật,legal-term,role title for privacy contact,§4,First use retains English in parentheses per brief,high,approved,
+account closure,đóng tài khoản,hủy tài khoản;xóa tài khoản,noun,end of subscription,§3,Distinct from deletion; closure precedes retention period,medium,approved,
+third-party,bên thứ ba,bên thứ 3;người thứ ba,legal-term,external service providers,§1,Standard Vietnamese legal phrasing,high,approved,
+rectify,chỉnh sửa,sửa chữa;hiệu chỉnh,legal-term,data subject right to correct data,§4,Vietnamese Civil Code uses 'chỉnh sửa' for correction of records,medium,approved,
+payment processor,đơn vị xử lý thanh toán,bộ xử lý thanh toán;nhà cung cấp thanh toán,noun,certified payment handler,§1,Distinguishes from technical 'processor' in data context,medium,approved,
+applicable law,pháp luật hiện hành,luật áp dụng;luật hiện tại,legal-term,governing legal framework,§4,Standard Vietnamese legislative drafting term,high,approved,

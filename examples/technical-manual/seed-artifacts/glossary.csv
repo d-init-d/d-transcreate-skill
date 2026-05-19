@@ -1,0 +1,11 @@
+term,preferred_translation,forbidden_translation,term_class,context,source_location,evidence,confidence,status,notes
+pipeline,pipeline,đường ống;ống dẫn,noun,data processing workflow,section-01-overview,"Vietnamese DevOps community consistently uses English loanword 'pipeline' in technical contexts",high,approved,Keep as English loanword per industry convention
+stage,giai đoạn,sân khấu;bước,noun,a single operation within a pipeline,section-01-overview,"'Giai đoạn' is standard in Vietnamese CI/CD and data engineering documentation",medium,approved,
+connector,connector,bộ kết nối;trình kết nối,noun,plugin that interfaces with external data systems,section-01-overview,"Community prefers English loanword for this specific concept in data tooling",high,approved,Keep as English loanword
+channel,kênh,,noun,typed buffered message path between stages,section-01-overview,"'Kênh' is the standard Vietnamese translation for message channels",high,approved,
+backpressure,backpressure,áp lực ngược,noun,flow control mechanism when downstream is slower,section-01-overview,"No established Vietnamese equivalent; English term used in Vietnamese Kafka/streaming docs",medium,approved,Keep as English loanword
+worker pool,worker pool,nhóm công nhân;bể worker,noun,set of processes executing pipeline stages,section-01-overview,"Vietnamese cloud-native community uses English term directly",medium,approved,Keep as English loanword
+scheduler,bộ lập lịch,,noun,service managing pipeline execution timing,section-01-overview,"'Bộ lập lịch' is established in Vietnamese OS and systems documentation",high,approved,
+retry policy,chính sách thử lại,chính sách retry,noun,rules governing automatic retry on failure,section-03-configuration,"'Chính sách thử lại' is natural Vietnamese; avoid mixing English 'retry' mid-phrase",medium,approved,
+deployment,triển khai,phát triển,noun,act of installing and running software in an environment,section-02-installation,"'Triển khai' is universally used in Vietnamese DevOps contexts; 'phát triển' means development",high,approved,
+schema validation,xác thực schema,,noun,process of checking data against a defined structure,section-03-configuration,"'Xác thực' for validation is standard; keep 'schema' as English loanword",medium,approved,

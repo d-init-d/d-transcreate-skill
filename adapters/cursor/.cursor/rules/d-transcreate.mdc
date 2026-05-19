@@ -1,0 +1,76 @@
+---
+description: Faithful translation and transcreation workflow for books, long-form documents, technical material, fiction, scripts, and mixed-format source files. Activate when translating, localizing, adapting, or quality-checking a substantial document with terminology research, style control, glossary management, continuity tracking, chunking, and optional parallel subagents.
+globs: "**/*.{md,txt,docx,pdf,html,rst,adoc,tex,epub}"
+alwaysApply: false
+---
+
+# D Transcreate Skill
+
+Use this skill to translate or transcreate long documents with controlled terminology,
+consistent voice, and durable state across context windows.
+
+## Canonical Workflow
+
+Read and follow the core entrypoint for operating principles and the full 7-phase workflow:
+
+→ `core/d-transcreate.md`
+
+Phases: Intake → Whole-Document Scan → Research Terminology and Style → Plan Chunks →
+Translate in Passes → Coordinate Subagents → Run QA Gates.
+
+## Coordinator Behavior
+
+When orchestrating the translation workflow, adopt the coordinator role defined in:
+
+→ `core/prompts/transcreate-coordinator.md`
+
+The coordinator holds final authority over the global Glossary, Style Sheet, voice
+consistency, continuity across chunks, and the merge of all chunk outputs.
+
+## Subagent Role Prompts
+
+| Role | Prompt File |
+|------|-------------|
+| Transcreate Coordinator | `core/prompts/transcreate-coordinator.md` |
+| Terminology Researcher | `core/prompts/terminology-researcher.md` |
+| Style Researcher | `core/prompts/style-researcher.md` |
+| Chunk Translator | `core/prompts/chunk-translator.md` |
+| Continuity Reviewer | `core/prompts/continuity-reviewer.md` |
+| Fidelity Reviewer | `core/prompts/fidelity-reviewer.md` |
+| Formatting Reviewer | `core/prompts/formatting-reviewer.md` |
+
+## Workflow Reference Files
+
+- `core/workflows/long-document.md` — full staged workflow for books and large documents.
+- `core/workflows/terminology-research.md` — term mining, source priority, d-research integration.
+- `core/workflows/fiction-continuity.md` — story bible, reveal timing, character voice.
+- `core/workflows/technical-domain.md` — domain map, acronyms, units, standards.
+- `core/workflows/qa-gates.md` — the 8 QA gates.
+- `core/workflows/context-management.md` — context budget, chunk loading, resume procedure.
+- `core/workflows/subagents.md` — readiness gate, role dispatch, parallel rules.
+
+## Artifact Schemas
+
+All artifact templates live under `core/schemas/`:
+
+- `core/schemas/translation-brief.md`
+- `core/schemas/source-map.md`
+- `core/schemas/glossary.md`
+- `core/schemas/style-sheet.md`
+- `core/schemas/story-bible.md`
+- `core/schemas/domain-map.md`
+- `core/schemas/chunk-manifest.md`
+- `core/schemas/chunk-summary.md`
+- `core/schemas/unresolved-issues.md`
+- `core/schemas/qa-report.md`
+
+## Context Management
+
+- Never load the full source document into context unless it genuinely fits with room for QA.
+- Per chunk, load only: brief, glossary slice, style rules, story bible/domain map excerpt,
+  previous + next chunk summaries, current source chunk, and relevant unresolved issues.
+- After completing a chunk, write a compact summary and unload the raw source.
+- On context reset, re-open the chunk manifest first, then brief, style sheet, glossary,
+  and current chunk source.
+
+See `core/workflows/context-management.md` for the full resume procedure.

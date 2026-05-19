@@ -1,0 +1,11 @@
+term,preferred_translation,forbidden_translation,term_class,context,source_location,evidence,confidence,status,notes
+the Hollow,Hư Không,Bóng ma;Linh hồn,proper-name,spectral entities guarding hidden paths,scene-01,Original fiction — name conveys emptiness and absence,high,approved,Capitalize in Vietnamese as a proper noun
+tide-fog,sương thủy triều,sương mù,noun,magical fog that rolls in with tidal patterns,scene-01,Compound term specific to the Ashveil Marshes setting,medium,approved,Distinguish from ordinary fog (sương mù)
+hidden paths,đường ẩn,đường bí mật;lối đi bí mật,noun,paths sealed from maps by old cartographers,scene-02,Core concept of the story — paths that exist but are invisible on maps,high,approved,Use consistently throughout
+cartographer,nhà vẽ bản đồ,người làm bản đồ,noun,Seren's profession — one who draws maps,scene-01,Standard Vietnamese term for mapmaker,high,approved,
+Kaelish architecture,kiến trúc Kael,kiến trúc cổ,adjective + noun,architectural style that folds space,scene-01,Derived from proper name Kael — keep as transliteration,medium,approved,Adjective form of the place/culture name
+folded space,không gian gấp,không gian xếp;không gian co lại,noun,magical property of Kaelish buildings being larger inside,scene-01,Conveys the origami-like nature of the spatial manipulation,medium,approved,
+the Sorrow River,sông Sầu,sông Buồn;sông Đau Thương,proper-name,river in the Ashveil region,scene-02,Translate meaning — 'Sorrow' is descriptive not arbitrary,high,approved,Vietnamese readers expect translated river names
+master chart,bản đồ tổng,bản đồ chính;bản đồ lớn,noun,Seren's comprehensive map of the region,scene-03,Cartographic term for the primary reference map,medium,approved,
+blank spaces,khoảng trống,chỗ trống;vùng trắng,noun,metaphysical spaces between maps where the Hollow exist,scene-03,Carries both literal (empty map areas) and metaphysical meaning,medium,approved,Context determines whether literal or figurative
+compass rose,hoa la bàn,hoa gió;biểu tượng la bàn,noun,directional symbol etched on the lantern's glass,scene-01,Standard Vietnamese cartographic term,high,approved,
