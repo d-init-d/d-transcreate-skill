@@ -52,7 +52,7 @@ agent operate through durable artifacts:
 ## Pack structure vs installed skill
 
 This repo is not meant to look like a single platform's final skill directory.
-It has two layers:
+It is a source distribution pack with two layers:
 
 1. **Canonical source** — `core/` contains the reusable workflow, schemas, and
    role prompts. This is the source of truth.
@@ -60,45 +60,47 @@ It has two layers:
    files needed by one target tool.
 
 When you install the pack, `scripts/build_adapters.py` selects one adapter and
-generates the layout expected by that tool. For example:
-
-```bash
-python3 scripts/build_adapters.py --platform claude-code --dest ./my-project
-```
-
-creates a Claude-friendly layout such as:
+generates the layout expected by that tool. Users normally install one target
+layout into their project. For Claude Code, that looks like:
 
 ```text
 my-project/
 ├── .claude/
-│   ├── skills/d-transcreate/SKILL.md
+│   ├── skills/
+│   │   └── d-transcreate/
+│   │       └── SKILL.md
 │   └── agents/
-├── core/
+│       ├── transcreate-coordinator.md
+│       ├── terminology-researcher.md
+│       └── ...
+├── core/                    # Canonical workflow copied with the skill
 ├── README.md
 ├── LICENSE
 ├── VERSION
 └── .d-transcreate-manifest.json
 ```
 
-For Cursor, Codex, OpenCode, or a generic agent, the installed entrypoint is
-different, but the same `core/` workflow is reused. The adapter directories are
-there to publish one skill consistently across tools, not to make users choose
-between different workflows.
+For Cursor, Codex, OpenCode, or generic agents, the entrypoint changes to the
+file that tool expects, but users still get one installed skill backed by the
+same `core/` workflow. The adapter directories exist to publish one skill
+consistently across tools, not to make users choose between different workflows.
 
 ## Source repository layout
 
+This layout is for maintainers of the pack, not the shape users need to memorize:
+
 ```text
 d-transcreate-skill/
-├── core/                    # Single source of truth
-│   ├── d-transcreate.md     # Canonical entrypoint
+├── core/                    # Canonical workflow source
+│   ├── d-transcreate.md     # Main entrypoint
 │   ├── workflows/           # 7 workflow guides
 │   ├── schemas/             # 10 artifact schemas
 │   └── prompts/             # 7 subagent role prompts
-├── adapters/                # Platform wrappers used by the installer
+├── adapters/                # Thin platform wrappers used by build_adapters.py
 ├── examples/                # Fiction, technical, and legal/policy examples
-├── scripts/                 # Validation and adapter build tooling
+├── scripts/                 # Maintainer validation/build tooling
 ├── tests/                   # Smoke tests for packaging and validation
-├── AGENTS.md                # Generic-agent bootstrap
+├── AGENTS.md                # Generic-agent bootstrap for this repo
 ├── CHANGELOG.md             # Release notes
 ├── LICENSE                  # Noncommercial license terms
 └── VERSION                  # Current version
@@ -255,8 +257,8 @@ vững:
 
 ## Source pack khác gì skill đã cài?
 
-Repo này không cố bắt chước layout cuối cùng của một nền tảng duy nhất. Nó có
-hai lớp:
+Repo này không cố bắt chước layout cuối cùng của một nền tảng duy nhất. Đây là
+source distribution pack với hai lớp:
 
 1. **Nguồn canonical** — `core/` chứa workflow, schema, và role prompt dùng
    chung. Đây là nguồn chuẩn duy nhất.
@@ -264,45 +266,48 @@ hai lớp:
    từng tool.
 
 Khi cài, `scripts/build_adapters.py` chọn một adapter và tạo layout đúng với
-tool đích. Ví dụ:
-
-```bash
-python3 scripts/build_adapters.py --platform claude-code --dest ./my-project
-```
-
-tạo layout phù hợp Claude như:
+tool đích. Người dùng thường chỉ cài một layout vào project. Với Claude Code,
+layout sẽ giống như:
 
 ```text
 my-project/
 ├── .claude/
-│   ├── skills/d-transcreate/SKILL.md
+│   ├── skills/
+│   │   └── d-transcreate/
+│   │       └── SKILL.md
 │   └── agents/
-├── core/
+│       ├── transcreate-coordinator.md
+│       ├── terminology-researcher.md
+│       └── ...
+├── core/                    # Workflow canonical đi kèm skill
 ├── README.md
 ├── LICENSE
 ├── VERSION
 └── .d-transcreate-manifest.json
 ```
 
-Với Cursor, Codex, OpenCode, hoặc generic agent, entrypoint đã cài sẽ khác,
-nhưng vẫn dùng chung workflow trong `core/`. Các thư mục adapter tồn tại để
-phân phối cùng một skill nhất quán qua nhiều tool, không phải để tạo nhiều
-workflow khác nhau cho người dùng chọn.
+Với Cursor, Codex, OpenCode, hoặc generic agent, entrypoint sẽ đổi theo chuẩn
+của tool đó, nhưng người dùng vẫn nhận một skill duy nhất dùng chung workflow
+trong `core/`. Các thư mục adapter tồn tại để phân phối cùng một skill nhất
+quán qua nhiều tool, không phải để tạo nhiều workflow khác nhau cho người dùng
+chọn.
 
 ## Source repository layout
 
+Layout này dành cho maintainer của pack, không phải thứ người dùng cuối cần ghi nhớ:
+
 ```text
 d-transcreate-skill/
-├── core/                    # Nguồn chuẩn duy nhất
-│   ├── d-transcreate.md     # Entrypoint canonical
+├── core/                    # Nguồn workflow canonical
+│   ├── d-transcreate.md     # Entrypoint chính
 │   ├── workflows/           # 7 hướng dẫn workflow
 │   ├── schemas/             # 10 schema artifact
 │   └── prompts/             # 7 prompt cho subagent
-├── adapters/                # Wrapper theo nền tảng dùng bởi installer
+├── adapters/                # Wrapper mỏng cho từng tool, dùng bởi build_adapters.py
 ├── examples/                # Ví dụ fiction, kỹ thuật, pháp lý/chính sách
-├── scripts/                 # Công cụ validate và build adapter
+├── scripts/                 # Công cụ validate/build cho maintainer
 ├── tests/                   # Smoke test cho packaging và validation
-├── AGENTS.md                # Bootstrap cho generic agent
+├── AGENTS.md                # Bootstrap generic-agent cho repo này
 ├── CHANGELOG.md             # Ghi chú phát hành
 ├── LICENSE                  # Điều khoản phi thương mại
 └── VERSION                  # Phiên bản hiện tại
