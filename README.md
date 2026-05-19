@@ -12,8 +12,10 @@ built for projects where quality depends on more than sentence-by-sentence
 translation: terminology control, register, continuity, chunk planning,
 fidelity review, formatting preservation, and resumable state.
 
-It works across multiple agent platforms while keeping one canonical workflow in
-`core/`.
+This repository is the **source distribution pack**. It intentionally contains
+multiple thin adapters so the same canonical skill can be installed into
+different agent tools. A consumer project normally installs only one adapter,
+not this whole repository layout.
 
 ## Why this exists
 
@@ -47,7 +49,43 @@ agent operate through durable artifacts:
 | OpenCode | `adapters/opencode/` | `opencode.json` |
 | Generic agents | `adapters/generic/` | `d-transcreate.md` |
 
-## What is included
+## Pack structure vs installed skill
+
+This repo is not meant to look like a single platform's final skill directory.
+It has two layers:
+
+1. **Canonical source** — `core/` contains the reusable workflow, schemas, and
+   role prompts. This is the source of truth.
+2. **Platform adapters** — `adapters/<platform>/` contains the small wrapper
+   files needed by one target tool.
+
+When you install the pack, `scripts/build_adapters.py` selects one adapter and
+generates the layout expected by that tool. For example:
+
+```bash
+python3 scripts/build_adapters.py --platform claude-code --dest ./my-project
+```
+
+creates a Claude-friendly layout such as:
+
+```text
+my-project/
+├── .claude/
+│   ├── skills/d-transcreate/SKILL.md
+│   └── agents/
+├── core/
+├── README.md
+├── LICENSE
+├── VERSION
+└── .d-transcreate-manifest.json
+```
+
+For Cursor, Codex, OpenCode, or a generic agent, the installed entrypoint is
+different, but the same `core/` workflow is reused. The adapter directories are
+there to publish one skill consistently across tools, not to make users choose
+between different workflows.
+
+## Source repository layout
 
 ```text
 d-transcreate-skill/
@@ -56,7 +94,7 @@ d-transcreate-skill/
 │   ├── workflows/           # 7 workflow guides
 │   ├── schemas/             # 10 artifact schemas
 │   └── prompts/             # 7 subagent role prompts
-├── adapters/                # Platform-specific thin wrappers
+├── adapters/                # Platform wrappers used by the installer
 ├── examples/                # Fiction, technical, and legal/policy examples
 ├── scripts/                 # Validation and adapter build tooling
 ├── tests/                   # Smoke tests for packaging and validation
@@ -180,8 +218,9 @@ lượng cao. Pack này tập trung vào những yếu tố làm nên bản dị
 nhất quán, giọng văn, continuity, chia chunk, kiểm tra fidelity, giữ formatting,
 và khả năng resume sau khi context bị reset.
 
-Pack hỗ trợ nhiều nền tảng agent nhưng chỉ duy trì một workflow chuẩn trong
-`core/`.
+Repo này là **source distribution pack**. Nó cố ý chứa nhiều adapter mỏng để
+cùng một skill canonical có thể cài vào nhiều agent tool khác nhau. Project
+người dùng thường chỉ cài một adapter, không copy nguyên layout repo này.
 
 ## Vì sao cần pack này
 
@@ -214,7 +253,43 @@ vững:
 | OpenCode | `adapters/opencode/` | `opencode.json` |
 | Agent bất kỳ | `adapters/generic/` | `d-transcreate.md` |
 
-## Bên trong có gì
+## Source pack khác gì skill đã cài?
+
+Repo này không cố bắt chước layout cuối cùng của một nền tảng duy nhất. Nó có
+hai lớp:
+
+1. **Nguồn canonical** — `core/` chứa workflow, schema, và role prompt dùng
+   chung. Đây là nguồn chuẩn duy nhất.
+2. **Adapter theo nền tảng** — `adapters/<platform>/` chứa wrapper nhỏ cần cho
+   từng tool.
+
+Khi cài, `scripts/build_adapters.py` chọn một adapter và tạo layout đúng với
+tool đích. Ví dụ:
+
+```bash
+python3 scripts/build_adapters.py --platform claude-code --dest ./my-project
+```
+
+tạo layout phù hợp Claude như:
+
+```text
+my-project/
+├── .claude/
+│   ├── skills/d-transcreate/SKILL.md
+│   └── agents/
+├── core/
+├── README.md
+├── LICENSE
+├── VERSION
+└── .d-transcreate-manifest.json
+```
+
+Với Cursor, Codex, OpenCode, hoặc generic agent, entrypoint đã cài sẽ khác,
+nhưng vẫn dùng chung workflow trong `core/`. Các thư mục adapter tồn tại để
+phân phối cùng một skill nhất quán qua nhiều tool, không phải để tạo nhiều
+workflow khác nhau cho người dùng chọn.
+
+## Source repository layout
 
 ```text
 d-transcreate-skill/
@@ -223,7 +298,7 @@ d-transcreate-skill/
 │   ├── workflows/           # 7 hướng dẫn workflow
 │   ├── schemas/             # 10 schema artifact
 │   └── prompts/             # 7 prompt cho subagent
-├── adapters/                # Wrapper mỏng theo nền tảng
+├── adapters/                # Wrapper theo nền tảng dùng bởi installer
 ├── examples/                # Ví dụ fiction, kỹ thuật, pháp lý/chính sách
 ├── scripts/                 # Công cụ validate và build adapter
 ├── tests/                   # Smoke test cho packaging và validation
