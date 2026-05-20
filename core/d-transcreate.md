@@ -16,6 +16,8 @@ consistent voice, and durable state across context windows.
 5. Mark uncertainty with a concrete note and a proposed resolution path.
 6. Do not copy existing copyrighted translations — use lawful samples only to infer terminology, register, and structural conventions.
 7. Keep reusable decisions in artifacts (files on disk), not in chat history.
+8. Before chunking or subagent dispatch, create a Context_Plan that records context assumptions, budget, chunk-size limits, and fallback mode.
+9. Use a Subagent_Dispatch_Plan whenever work is delegated; workers receive scoped slices and proposals flow back to the Coordinator.
 
 ## Core Workflow
 
@@ -38,7 +40,8 @@ If `d-research-skill` is accessible, use it for source discovery and evidence lo
 
 ### Phase 4 — Plan Chunks
 
-Segment by semantic boundaries (chapter, scene, section, subsection, table/figure group).
+Create a **Context_Plan** first to record context budget, chunk-size limits, and fallback triggers.
+Then segment by semantic boundaries (chapter, scene, section, subsection, table/figure group) within the Context_Plan's chunk-size limits.
 Keep each chunk small enough for one pass with room for brief, glossary slice, style rules, adjacent summaries, and QA notes.
 Create a **Chunk_Manifest** as the authoritative status ledger.
 
@@ -51,7 +54,8 @@ Create a **Chunk_Manifest** as the authoritative status ledger.
 
 ### Phase 6 — Coordinate and Merge
 
-Use subagents only after the Translation_Brief, Glossary, Style_Sheet, Chunk_Manifest, and Story_Bible/Domain_Map exist.
+Before dispatching workers, create a **Subagent_Dispatch_Plan**. If the platform does not support parallel subagents, execute the same plan sequentially.
+Use subagents only after the Translation_Brief, Glossary, Style_Sheet, Chunk_Manifest, Context_Plan, and Story_Bible/Domain_Map exist.
 Assign disjoint scopes. Keep one coordinator responsible for final terminology, voice, and continuity.
 Merge chunk outputs in source order and run a final voice pass.
 
@@ -100,6 +104,8 @@ Workers propose; the Coordinator approves. No worker writes the global Glossary 
 | `core/schemas/domain-map.md` | Domain_Map |
 | `core/schemas/chunk-manifest.md` | Chunk_Manifest (CSV + Markdown forms) |
 | `core/schemas/chunk-summary.md` | Chunk_Summary |
+| `core/schemas/context-plan.md` | Context_Plan |
+| `core/schemas/subagent-dispatch-plan.md` | Subagent_Dispatch_Plan |
 | `core/schemas/unresolved-issues.md` | Unresolved_Issues_Log |
 | `core/schemas/qa-report.md` | QA_Report |
 

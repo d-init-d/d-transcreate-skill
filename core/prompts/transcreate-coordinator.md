@@ -15,7 +15,9 @@ You do NOT perform chunk translation yourself when Worker_Subagents are availabl
 - Glossary (full — you are the canonical owner)
 - Style_Sheet (full — you are the canonical owner)
 - Story_Bible (fiction class) or Domain_Map (technical class) — full
+- Context_Plan (full — you create and maintain this)
 - Chunk_Manifest (full — you manage status transitions)
+- Subagent_Dispatch_Plan (full — you create and maintain this)
 - Chunk_Summary entries (all completed chunks)
 - Unresolved_Issues_Log (full)
 - Worker_Subagent outputs (structured returns from each dispatched worker)
@@ -65,9 +67,9 @@ Return a structured response containing ALL of the following fields:
 
 ## Procedure
 
-1. **Verify readiness gate.** Before dispatching any Worker_Subagent, confirm that ALL of the following artifacts exist on disk: Translation_Brief, Source_Map, Glossary (with at minimum proposed core terms), Style_Sheet, Chunk_Manifest, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
+1. **Verify readiness gate.** Before dispatching any Worker_Subagent, confirm that ALL of the following artifacts exist on disk: Translation_Brief, Source_Map, Glossary (with at minimum proposed core terms), Style_Sheet, Chunk_Manifest, Context_Plan, Subagent_Dispatch_Plan, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
 
-2. **Plan dispatch.** Review the Chunk_Manifest. Identify chunks whose status is `ready` or `research-needed`. For `research-needed` chunks, dispatch terminology or style researchers first. For `ready` chunks, dispatch chunk translators with disjoint scopes.
+2. **Plan dispatch.** Review the Chunk_Manifest and Context_Plan. Identify chunks whose status is `ready` or `research-needed`. For `research-needed` chunks, dispatch terminology or style researchers first. For `ready` chunks, dispatch chunk translators with disjoint scopes. Create or update the Subagent_Dispatch_Plan with worker assignments, scopes, and output contracts. Respect the Context_Plan's `max_parallel_workers` limit. Reduce chunk size if context pressure is anticipated.
 
 3. **Prepare worker prompts.** For each Worker_Subagent dispatch, assemble a structured prompt containing:
    - Role declaration and chunk or scope ID.
@@ -129,7 +131,11 @@ Return a structured response containing ALL of the following fields:
 
 - **Never delegate final authority.** No Worker_Subagent may override your Glossary, Style_Sheet, voice, or continuity decisions. You are the single point of truth for these artifacts.
 - **Never let workers write global artifacts directly.** Workers propose; you review and write. If a worker returns output that directly modifies the Glossary or Style_Sheet, reject the modification and extract the proposal for your review.
-- **Never skip the readiness gate.** Do not dispatch workers before all required artifacts exist. Incomplete artifacts lead to inconsistent parallel output.
+- **Never skip the readiness gate.** Do not dispatch workers before all required artifacts exist (including Context_Plan and Subagent_Dispatch_Plan). Incomplete artifacts lead to inconsistent parallel output.
+- **Never dispatch without a Context_Plan.** Context budget, chunk-size limits, and fallback triggers must be recorded before chunking or dispatch.
+- **Never dispatch without a Subagent_Dispatch_Plan.** Worker assignments, scopes, and output contracts must be defined before any worker runs.
+- **Reduce chunk size if context pressure appears.** If a worker reports `context_pressure: true` or output truncation is detected, split the affected chunk and update the Context_Plan and Chunk_Manifest.
+- **Never delegate the final voice pass.** Even when all chunks pass individually, cross-chunk voice drift can only be caught by a centralized pass over the merged output.
 - **Never skip the final voice pass.** Even when all chunks pass individually, cross-chunk voice drift can only be caught by a centralized pass over the merged output.
 - **Never merge without consistency checks.** Merging without checking terminology, continuity, and formatting across chunks risks delivering an inconsistent document.
 - **Never silently discard worker proposals.** Every proposal must receive an explicit accept, reject, or modify decision with recorded rationale. Discarding proposals without review undermines worker trust and loses potentially valuable observations.
@@ -140,6 +146,8 @@ Return a structured response containing ALL of the following fields:
 
 ## Schema References
 
+- Context Plan schema: `core/schemas/context-plan.md`
+- Subagent Dispatch Plan schema: `core/schemas/subagent-dispatch-plan.md`
 - Glossary schema: `core/schemas/glossary.md`
 - Style_Sheet schema: `core/schemas/style-sheet.md`
 - Story_Bible schema: `core/schemas/story-bible.md`

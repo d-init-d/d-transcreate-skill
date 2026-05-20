@@ -40,6 +40,10 @@ Return a structured response containing ALL of the following fields:
 - **checks_performed**: Array of check categories completed (from the procedure list below)
 - **summary**: Brief overall assessment of formatting quality for the reviewed scope
 - **changed_files**: List of files affected (typically none for this role; defects are returned, not fixed)
+- **context_pressure**: Object reporting whether context limits were approached, containing:
+  - `value` — boolean: true if context pressure was experienced, false otherwise
+  - `reason` — description of pressure source (empty string if value is false)
+  - `recommended_split` — suggested narrower review scope if needed (empty string if not applicable)
 
 ## Procedure
 

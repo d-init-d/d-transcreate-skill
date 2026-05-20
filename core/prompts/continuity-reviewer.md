@@ -42,6 +42,10 @@ Return a structured response containing ALL of the following fields:
 - **summary**: Brief overall assessment of continuity quality for the reviewed range (1–3 sentences)
 - **chunks_reviewed**: List of chunk_ids that were reviewed in this pass
 - **changed_files**: List of files affected (typically only `unresolved-issues.md` for new entries)
+- **context_pressure**: Object reporting whether context limits were approached, containing:
+  - `value` — boolean: true if context pressure was experienced, false otherwise
+  - `reason` — description of pressure source (empty string if value is false)
+  - `recommended_split` — suggested narrower review scope if needed (empty string if not applicable)
 
 ## Procedure
 

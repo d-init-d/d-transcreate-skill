@@ -61,8 +61,16 @@ All artifact templates live under `core/schemas/`:
 - `core/schemas/domain-map.md`
 - `core/schemas/chunk-manifest.md`
 - `core/schemas/chunk-summary.md`
+- `core/schemas/context-plan.md`
+- `core/schemas/subagent-dispatch-plan.md`
 - `core/schemas/unresolved-issues.md`
 - `core/schemas/qa-report.md`
+
+## Orchestration Contract
+
+Before chunking, create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget and chunk-size limits. Before dispatching any worker role, create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`).
+
+If Cursor does not support real parallel subagents, execute the same role contract sequentially while preserving the artifact handoff rules. See `core/workflows/subagents.md` for the sequential fallback procedure.
 
 ## Context Management
 

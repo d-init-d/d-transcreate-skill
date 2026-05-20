@@ -58,6 +58,10 @@ Return a structured response containing ALL of the following fields:
   - `unresolved_issues` — items deferred to the Unresolved_Issues_Log
   - `next_chunk_dependency` — what the next chunk needs to know from this one
 - **changed_files**: List of files this output affects (typically the chunk output file and the chunk summary)
+- **context_pressure**: Object reporting whether context limits were approached, containing:
+  - `value` — boolean: true if context pressure was experienced, false otherwise
+  - `reason` — description of pressure source (empty string if value is false)
+  - `recommended_split` — suggested split point if chunk should be smaller (empty string if not applicable)
 
 ## Procedure
 
@@ -126,6 +130,9 @@ Return a structured response containing ALL of the following fields:
 - **Never write the global Style_Sheet directly.** All style observations are proposals returned to the Coordinator.
 - **Never write the Story_Bible or Domain_Map directly.** Return continuity notes; the Coordinator decides what to accept.
 - **Never translate outside your assigned chunk.** Your scope is exactly one chunk. Do not translate adjacent text, even if visible in context.
+- **Operate only on assigned scope.** Do not request or load full source document unless explicitly authorized by the Coordinator.
+- **Report context pressure.** If input slices are insufficient, output is being truncated, or you cannot complete QA compare in one pass, set `context_pressure.value: true` with a reason and recommended split point.
+- **Do not modify global artifacts.** You may not write to Glossary, Style_Sheet, Story_Bible, Domain_Map, or Chunk_Manifest. Return proposals only.
 - **Never merge outputs with other chunks.** Merging is the Coordinator's responsibility.
 - **Never make cross-chunk decisions.** If a decision requires knowledge of other chunks' translations, flag it as uncertain and defer to the Coordinator.
 - **Never skip a pass.** All four passes (A, B, C, D) are mandatory for every chunk, regardless of chunk length or apparent simplicity.

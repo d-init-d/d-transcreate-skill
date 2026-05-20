@@ -108,7 +108,11 @@ Schema: `core/schemas/source-map.md`.
 
 ## Phase 3: Segmenting (Chunking)
 
+Create a **Context_Plan** (schema: `core/schemas/context-plan.md`) before finalizing chunk boundaries. The Context_Plan determines the effective chunk-size limits based on platform, model, and material class.
+
 Split the work by **semantic units**, not arbitrary token count. Never split in the middle of a sentence, paragraph, table row, or single dialogue exchange.
+
+If a semantic unit is too large for the Context_Plan's chunk-size limits, split at the next safest lower-level boundary.
 
 ### Chunk Boundary Preference Order
 
@@ -120,12 +124,27 @@ Split the work by **semantic units**, not arbitrary token count. Never split in 
 
 ### Recommended Chunk Sizes
 
-| Material type | Source words per chunk |
+These are initial estimates. Final chunk size is determined by the Context_Plan's `max_source_words_per_chunk` field and adjusted per the rules in `core/workflows/context-management.md`.
+
+| Material type | Source words per chunk (standard profile) |
 |---|---|
-| Routine prose | 1,200–2,500 |
-| Dense technical / legal text | 600–1,500 |
-| Fiction scene / dialogue | One scene or 800–2,000 |
+| Routine prose | 900–1,800 |
+| Dense technical / legal text | 600–1,200 |
+| Fiction scene / dialogue | One scene or 800–1,500 |
 | Tables / slides / subtitles | One logical table, slide group, or subtitle block |
+
+For conservative and large_context profiles, see `core/schemas/context-plan.md`.
+
+### Chunk Resizing Triggers
+
+Reduce chunk size below the Context_Plan maximum when:
+
+- Glossary slice for the chunk exceeds 2,000 words.
+- Story_Bible or Domain_Map excerpt exceeds 1,500 words.
+- QA compare cannot fit source + target in one pass.
+- Output is too long for one pass (significant expansion in translation).
+- Worker reports `context_pressure: true`.
+- The chunk contains dense tables, citations, or cross-references requiring extra context.
 
 ### Chunk Sizing Constraint
 
@@ -227,7 +246,7 @@ If a term in the chunk is ambiguous and no glossary entry resolves it, mark the 
 
 ## Phase 5: Subagent Dispatch (When Available)
 
-This phase applies only when the platform supports parallel subagents. If not, execute the same role responsibilities sequentially.
+This phase applies only when the platform supports parallel subagents. If not, execute the same role responsibilities sequentially while following the same artifact contract.
 
 ### Readiness Gate
 
@@ -239,6 +258,14 @@ Do NOT dispatch any Worker_Subagent before ALL of the following exist on disk:
 - Style_Sheet
 - Chunk_Manifest
 - Story_Bible or Domain_Map (as applicable)
+- Context_Plan
+- Subagent_Dispatch_Plan
+
+### Dispatch Plan Requirement
+
+Before dispatching workers, create a **Subagent_Dispatch_Plan** (schema: `core/schemas/subagent-dispatch-plan.md`). The plan records mode, worker assignments, scopes, dependencies, artifact slices, output contracts, and fallback policy.
+
+If the platform does not support parallel subagents, use `mode: sequential` but still create the dispatch plan to maintain the artifact contract and enable resume.
 
 ### Dispatch Rules
 
@@ -307,7 +334,9 @@ Before delivery, all QA gates defined in `core/workflows/qa-gates.md` must pass.
 | Glossary | Phase 2–4 | `core/schemas/glossary.md` |
 | Style_Sheet | Phase 2–4 | `core/schemas/style-sheet.md` |
 | Story_Bible / Domain_Map | Phase 2–4 | `core/schemas/story-bible.md` / `core/schemas/domain-map.md` |
+| Context_Plan | Phase 3 (before final chunking) | `core/schemas/context-plan.md` |
 | Chunk_Manifest | Phase 3–6 | `core/schemas/chunk-manifest.md` |
+| Subagent_Dispatch_Plan | Phase 5 (before dispatch) | `core/schemas/subagent-dispatch-plan.md` |
 | Chunk_Summary (per chunk) | Phase 4 (Pass D) | `core/schemas/chunk-summary.md` |
 | Unresolved_Issues_Log | Throughout | `core/schemas/unresolved-issues.md` |
 | QA_Report | Phase 7 | `core/schemas/qa-report.md` |

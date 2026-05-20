@@ -39,6 +39,10 @@ Return a structured response containing ALL of the following fields:
   - `status` — `open`
 - **research_method**: Brief note on how research was conducted (e.g., "d-research delegation", "platform search tools", "agent knowledge only — no live search available")
 - **changed_files**: List of files affected (typically none for this role; proposals are returned, not written)
+- **context_pressure**: Object reporting whether context limits were approached, containing:
+  - `value` — boolean: true if context pressure was experienced, false otherwise
+  - `reason` — description of pressure source (empty string if value is false)
+  - `recommended_split` — suggested narrower research scope if needed (empty string if not applicable)
 - **uncertain_items**: List of terms where confidence is `low` or where conflicting evidence was found
 
 ## Procedure

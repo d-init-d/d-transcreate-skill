@@ -26,9 +26,17 @@ When starting a translation task:
 1. Produce a Translation Brief before translating anything.
 2. Scan the full document and create a Source Map.
 3. Research terminology and build a Glossary and Style Sheet.
-4. Segment into chunks by semantic boundaries.
-5. Translate each chunk in multiple passes (draft, source-compare, revise, state-update).
-6. Run QA gates before delivery.
+4. Create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget and chunk-size limits.
+5. Segment into chunks by semantic boundaries within the Context_Plan's limits.
+6. Create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`) before dispatching workers.
+7. Translate each chunk in multiple passes (draft, source-compare, revise, state-update).
+8. Run QA gates before delivery.
+
+## Orchestration Contract
+
+If OpenCode does not support real parallel subagents, execute the same role contract sequentially while preserving the artifact handoff rules. The Context_Plan and Subagent_Dispatch_Plan are still required for auditability and resume support.
+
+See `core/workflows/subagents.md` and `core/workflows/context-management.md` for full details.
 
 ## Subagent Roles
 

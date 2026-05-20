@@ -17,9 +17,22 @@ sessions.
 2. Create the Translation_Brief before translating any chunk.
 3. Build the Source_Map, then the Glossary and Style_Sheet.
 4. Add a Story_Bible for narrative work or a Domain_Map for technical/legal work.
-5. Create the Chunk_Manifest and translate chunk-by-chunk in passes.
-6. Use `.claude/agents/` role files only after the readiness gate is satisfied.
-7. Merge centrally, run the final voice pass, then run all QA gates.
+5. Create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget, chunk-size limits, and fallback triggers.
+6. Create the Chunk_Manifest within the Context_Plan's chunk-size limits.
+7. Create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`) before dispatching any worker.
+8. Use `.claude/agents/` role files only after the readiness gate is satisfied.
+9. Merge centrally, run the final voice pass, then run all QA gates.
+
+## Orchestration Model
+
+The main Claude thread acts as the **Coordinator**. It owns all global artifacts and dispatches subagents with scoped artifact slices only — never the full project context.
+
+- Coordinator creates and maintains the Context_Plan and Subagent_Dispatch_Plan.
+- Subagents receive only their assigned chunk text and relevant artifact slices.
+- Subagents return structured proposals; the Coordinator accepts/rejects and writes canonical artifacts.
+- If context pressure is detected, the Coordinator reduces chunk size and updates the plan.
+
+See `core/workflows/subagents.md` and `core/workflows/context-management.md` for full rules.
 
 ## Claude Subagents
 
@@ -60,6 +73,8 @@ Artifact templates:
 - `core/schemas/domain-map.md`
 - `core/schemas/chunk-manifest.md`
 - `core/schemas/chunk-summary.md`
+- `core/schemas/context-plan.md`
+- `core/schemas/subagent-dispatch-plan.md`
 - `core/schemas/unresolved-issues.md`
 - `core/schemas/qa-report.md`
 

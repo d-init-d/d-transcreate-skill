@@ -58,6 +58,10 @@ Return a structured response containing ALL of the following fields:
 - **summary**: Brief overall assessment of the chunk's fidelity (one to three sentences)
 - **pass_result** — one of: `pass` (no critical or major defects), `conditional-pass` (minor defects only), `fail` (critical or major defects found)
 - **changed_files**: List of files affected (typically only the Unresolved_Issues_Log)
+- **context_pressure**: Object reporting whether context limits were approached, containing:
+  - `value` — boolean: true if context pressure was experienced, false otherwise
+  - `reason` — description of pressure source (empty string if value is false)
+  - `recommended_split` — suggested narrower review scope if needed (empty string if not applicable)
 
 ## Procedure
 

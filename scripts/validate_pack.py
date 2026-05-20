@@ -681,6 +681,119 @@ def check_c11_install_manifest(root: Path) -> List[Finding]:
     return findings
 
 
+def check_c12_orchestration_content(root: Path) -> List[Finding]:
+    """C12: Orchestration schemas exist and key files reference them."""
+    findings: List[Finding] = []
+
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings  # C1 would catch this
+
+    # Check that orchestration schema files exist
+    required_schemas = [
+        "context-plan.md",
+        "subagent-dispatch-plan.md",
+    ]
+    schemas_dir = core_dir / "schemas"
+    for schema_name in required_schemas:
+        schema_path = schemas_dir / schema_name
+        if not schema_path.is_file():
+            findings.append(Finding(
+                "C12", "error",
+                f"Required orchestration schema missing: core/schemas/{schema_name}",
+                f"core/schemas/{schema_name}"
+            ))
+
+    # Content checks: key files must mention orchestration concepts
+    content_checks = [
+        (core_dir / "workflows" / "context-management.md", "Context_Plan",
+         "context-management.md must reference Context_Plan"),
+        (core_dir / "workflows" / "subagents.md", "Subagent_Dispatch_Plan",
+         "subagents.md must reference Subagent_Dispatch_Plan"),
+        (core_dir / "workflows" / "long-document.md", "Context_Plan",
+         "long-document.md must reference context-aware chunk sizing via Context_Plan"),
+        (core_dir / "prompts" / "transcreate-coordinator.md", "Context_Plan",
+         "Coordinator prompt must reference Context_Plan"),
+        (core_dir / "prompts" / "transcreate-coordinator.md", "Subagent_Dispatch_Plan",
+         "Coordinator prompt must reference Subagent_Dispatch_Plan"),
+    ]
+
+    for filepath, keyword, message in content_checks:
+        if not filepath.is_file():
+            continue  # Other checks will catch missing files
+        try:
+            text = filepath.read_text(encoding="utf-8")
+            if keyword not in text:
+                rel = filepath.relative_to(root).as_posix() if root in filepath.parents else str(filepath)
+                findings.append(Finding("C12", "error", message, rel))
+        except (UnicodeDecodeError, OSError):
+            continue
+
+    # Check that all seven prompt files exist
+    required_prompts = [
+        "transcreate-coordinator.md",
+        "terminology-researcher.md",
+        "style-researcher.md",
+        "chunk-translator.md",
+        "continuity-reviewer.md",
+        "fidelity-reviewer.md",
+        "formatting-reviewer.md",
+    ]
+    prompts_dir = core_dir / "prompts"
+    for prompt_name in required_prompts:
+        prompt_path = prompts_dir / prompt_name
+        if not prompt_path.is_file():
+            findings.append(Finding(
+                "C12", "error",
+                f"Required prompt file missing: core/prompts/{prompt_name}",
+                f"core/prompts/{prompt_name}"
+            ))
+
+    # Check adapter references to context/subagent workflows
+    adapters_dir = root / "adapters"
+    if adapters_dir.is_dir():
+        context_ref_pattern = re.compile(r'context-management\.md|Context_Plan|context-plan\.md')
+        subagent_ref_pattern = re.compile(r'subagents\.md|Subagent_Dispatch_Plan|subagent-dispatch-plan\.md')
+
+        for adapter_dir in sorted(adapters_dir.iterdir()):
+            if not adapter_dir.is_dir():
+                continue
+            adapter_name = adapter_dir.name
+            found_context_ref = False
+            found_subagent_ref = False
+
+            for filepath in adapter_dir.rglob("*"):
+                if not filepath.is_file():
+                    continue
+                if filepath.suffix not in (".md", ".mdc", ".yaml", ".yml", ".json"):
+                    continue
+                try:
+                    text = filepath.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                if context_ref_pattern.search(text):
+                    found_context_ref = True
+                if subagent_ref_pattern.search(text):
+                    found_subagent_ref = True
+                if found_context_ref and found_subagent_ref:
+                    break
+
+            if not found_context_ref:
+                findings.append(Finding(
+                    "C12", "warning",
+                    f"Adapter '{adapter_name}' does not reference context management or Context_Plan",
+                    f"adapters/{adapter_name}"
+                ))
+            if not found_subagent_ref:
+                findings.append(Finding(
+                    "C12", "warning",
+                    f"Adapter '{adapter_name}' does not reference subagent orchestration or Subagent_Dispatch_Plan",
+                    f"adapters/{adapter_name}"
+                ))
+
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
@@ -700,6 +813,7 @@ def run_all_checks(root: Path, line_budget: int, duplication_threshold: int) -> 
     findings.extend(check_c9_schema_existence(root))
     findings.extend(check_c10_example_readme(root))
     findings.extend(check_c11_install_manifest(root))
+    findings.extend(check_c12_orchestration_content(root))
 
     return findings
 
@@ -787,4 +901,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import io
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if sys.stderr.encoding != "utf-8":
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     sys.exit(main())

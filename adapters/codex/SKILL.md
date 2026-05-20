@@ -33,9 +33,9 @@ consistent voice, and durable state across context windows.
 | 1. Intake | Identify source, target, audience, mode, quality bar | Translation Brief |
 | 2. Scan | Whole-document inventory before any translation | Source Map |
 | 3. Research | Mine terms, research style, build glossary | Glossary + Style Sheet |
-| 4. Plan | Segment by semantic boundaries, create manifest | Chunk Manifest |
+| 4. Plan | Create Context_Plan, segment by semantic boundaries | Context_Plan + Chunk Manifest |
 | 5. Translate | Multi-pass per chunk: draft → compare → revise → update | Chunk outputs |
-| 6. Coordinate | Dispatch subagents (if parallel), merge, voice pass | Merged output |
+| 6. Coordinate | Create Subagent_Dispatch_Plan, dispatch (if parallel), merge, voice pass | Merged output |
 | 7. QA | Run all QA gates before delivery | QA Report |
 
 ## Subagent Roles
@@ -72,8 +72,16 @@ See `core/prompts/` for full role definitions.
 - `core/schemas/domain-map.md`
 - `core/schemas/chunk-manifest.md`
 - `core/schemas/chunk-summary.md`
+- `core/schemas/context-plan.md`
+- `core/schemas/subagent-dispatch-plan.md`
 - `core/schemas/unresolved-issues.md`
 - `core/schemas/qa-report.md`
+
+## Orchestration Contract
+
+Before chunking, create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget and chunk-size limits. Before dispatching any worker role, create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`).
+
+If Codex does not support real parallel subagents, execute the same role contract sequentially while preserving the artifact handoff rules. See `core/workflows/subagents.md` for the sequential fallback procedure.
 
 ## Default Deliverables
 

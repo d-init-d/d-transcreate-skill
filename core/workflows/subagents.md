@@ -12,8 +12,52 @@ Do NOT dispatch any Worker_Subagent until ALL of the following artifacts exist o
 4. **Style_Sheet** — register, rhythm, adaptation rules, and forbidden patterns recorded.
 5. **Chunk_Manifest** — all chunks planned with stable IDs, dependencies, and initial status.
 6. **Story_Bible** (fiction-class) or **Domain_Map** (technical/legal/medical class) — whichever applies.
+7. **Context_Plan** — context budget, chunk-size limits, and fallback triggers recorded.
+8. **Subagent_Dispatch_Plan** — worker assignments, scopes, and output contracts defined.
 
 If any artifact is missing or incomplete, the Coordinator must produce it before dispatching workers. This gate prevents inconsistent parallel output caused by workers operating without shared decisions.
+
+## Main Agent / Coordinator Responsibilities
+
+The Coordinator must:
+
+- Own all global artifacts (Glossary, Style_Sheet, Story_Bible/Domain_Map, Chunk_Manifest).
+- Create and maintain the Context_Plan.
+- Create and maintain the Subagent_Dispatch_Plan.
+- Verify the readiness gate before any dispatch.
+- Decide sequential vs parallel vs hybrid mode.
+- Prepare scoped worker prompts with artifact slices.
+- Validate worker returns against the output contract.
+- Accept/reject proposals with recorded rationale.
+- Resolve conflicts between workers.
+- Merge outputs centrally in source order.
+- Run the final voice pass (never delegated).
+- Run QA gates and produce the QA_Report.
+- Reduce chunk size if context pressure appears.
+
+## Dispatch Plan Requirement
+
+Do not dispatch any worker until the Subagent_Dispatch_Plan exists on disk (schema: `core/schemas/subagent-dispatch-plan.md`). The plan must specify:
+
+- Mode (sequential, parallel, or hybrid).
+- Each worker's role, scope, chunk assignments, and dependencies.
+- Input files and artifact slices each worker receives.
+- Allowed and forbidden write paths.
+- Output contract each worker must return.
+- Merge policy, QA policy, and fallback policy.
+
+Even in sequential mode (single agent executing all roles), the dispatch plan is required to maintain the artifact contract and enable resume after interruption.
+
+## Dispatch Decision Matrix
+
+| Task shape | Recommended mode | Reason |
+|---|---|---|
+| Short/simple document | No subagents | Overhead exceeds benefit |
+| Medium document, low complexity | Sequential roles | Consistency easier to maintain |
+| Large document, independent sections | Parallel chunk translators | Speedup with low dependency risk |
+| Fiction with tight continuity | Hybrid or sequential by scene group | Avoid voice/continuity drift |
+| High-stakes legal/medical/technical | Researchers + reviewers mandatory | Reduce terminology/fidelity risk |
+| Unknown context limit | Conservative/sequential | Avoid overflow |
 
 ## Role Responsibilities
 
@@ -139,10 +183,49 @@ Within a single translation run:
 - If a chunk-level decision conflicts with the Glossary or Style_Sheet, the Coordinator either updates the canonical artifact (with rationale) or rejects the chunk-level decision before merge.
 - When parallel workers propose conflicting changes, the Coordinator resolves before final merge and records the resolution in artifact notes.
 
+## Worker Lifecycle
+
+Each dispatched worker follows this lifecycle:
+
+1. **Prepare scoped prompt.** Coordinator assembles role declaration, source material, target context, artifact slices, adjacent summaries, and output contract.
+2. **Attach only allowed inputs.** Worker receives only the files and slices listed in the dispatch unit's `input_files` and `artifact_slices`.
+3. **Assign output path.** Worker writes only to `allowed_write_paths`.
+4. **Run worker.** Worker executes its role procedure.
+5. **Receive structured return.** Worker returns output matching the `output_contract`.
+6. **Validate return.** Coordinator checks all required fields are present and well-formed.
+7. **Extract proposals.** Coordinator separates glossary/style/continuity proposals from translated content.
+8. **Apply accepted changes.** Coordinator writes accepted proposals to canonical artifacts.
+9. **Update manifest.** Coordinator transitions chunk status in the Chunk_Manifest.
+10. **Queue QA.** Coordinator schedules review gates for completed chunks.
+
+## Context-Aware Dispatch Rules
+
+- Max parallel workers comes from the Context_Plan's `max_parallel_workers` field.
+- Do not dispatch adjacent fiction scenes in parallel if voice/continuity between them is unresolved.
+- Do not dispatch chunks with unresolved terminology dependencies (wait for terminology researcher to complete).
+- Do not dispatch dense legal/technical chunks until the terminology researcher has completed relevant terms.
+- Prefer parallel review (continuity, fidelity, formatting) after chunks are drafted, not before.
+- If a worker reports `context_pressure: true`, the coordinator must reduce scope or split the chunk before retrying.
+
+## Failure and Fallback Handling
+
+If a worker fails, times out, or returns invalid output:
+
+1. **Mark dispatch unit as failed/blocked** in the Subagent_Dispatch_Plan.
+2. **Do not mark the chunk as done** in the Chunk_Manifest.
+3. **Persist failure reason** in the dispatch unit's notes.
+4. **Coordinator retries** with smaller scope (split the chunk) or switches to sequential mode.
+5. **Update Subagent_Dispatch_Plan** with the new dispatch units.
+6. **If retry also fails**, flag for user intervention and halt further dispatch for the affected scope.
+
+Never leave a chunk in an ambiguous state. Either it is `done` with validated output, or it is `blocked`/`failed` with a recorded reason.
+
 ## References
 
 - Subagent prompt definitions: `core/prompts/transcreate-coordinator.md`, `core/prompts/terminology-researcher.md`, `core/prompts/style-researcher.md`, `core/prompts/chunk-translator.md`, `core/prompts/continuity-reviewer.md`, `core/prompts/fidelity-reviewer.md`, `core/prompts/formatting-reviewer.md`
 - Artifact schemas: `core/schemas/glossary.md`, `core/schemas/style-sheet.md`, `core/schemas/chunk-manifest.md`, `core/schemas/story-bible.md`, `core/schemas/domain-map.md`
+- Context Plan schema: `core/schemas/context-plan.md`
+- Subagent Dispatch Plan schema: `core/schemas/subagent-dispatch-plan.md`
 - Context management and resume: `core/workflows/context-management.md`
 - QA gates (post-merge): `core/workflows/qa-gates.md`
 - Long-document workflow (phases): `core/workflows/long-document.md`
