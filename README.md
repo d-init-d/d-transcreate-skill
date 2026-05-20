@@ -12,8 +12,10 @@ built for projects where quality depends on more than sentence-by-sentence
 translation: terminology control, register, continuity, chunk planning,
 fidelity review, formatting preservation, and resumable state.
 
-It works across multiple agent platforms while keeping one canonical workflow in
-`core/`.
+This repository is the **source distribution pack**. It intentionally contains
+multiple thin adapters so the same canonical skill can be installed into
+different agent tools. A consumer project normally installs only one adapter,
+not this whole repository layout.
 
 ## Why this exists
 
@@ -48,20 +50,58 @@ agent operate through durable artifacts:
 | OpenCode | `adapters/opencode/` | `opencode.json` |
 | Generic agents | `adapters/generic/` | `d-transcreate.md` |
 
-## What is included
+## Pack structure vs installed skill
+
+This repo is not meant to look like a single platform's final skill directory.
+It is a source distribution pack with two layers:
+
+1. **Canonical source** — `core/` contains the reusable workflow, schemas, and
+   role prompts. This is the source of truth.
+2. **Platform adapters** — `adapters/<platform>/` contains the small wrapper
+   files needed by one target tool.
+
+When you install the pack, `scripts/build_adapters.py` selects one adapter and
+generates the layout expected by that tool. Users normally install one target
+layout into their project. For Claude Code, that looks like:
+
+```text
+my-project/
+├── .claude/
+│   ├── skills/
+│   │   └── d-transcreate/
+│   │       └── SKILL.md
+│   └── agents/
+│       ├── transcreate-coordinator.md
+│       ├── terminology-researcher.md
+│       └── ...
+├── core/                    # Canonical workflow copied with the skill
+├── README.md
+├── LICENSE
+├── VERSION
+└── .d-transcreate-manifest.json
+```
+
+For Cursor, Codex, OpenCode, or generic agents, the entrypoint changes to the
+file that tool expects, but users still get one installed skill backed by the
+same `core/` workflow. The adapter directories exist to publish one skill
+consistently across tools, not to make users choose between different workflows.
+
+## Source repository layout
+
+This layout is for maintainers of the pack, not the shape users need to memorize:
 
 ```text
 d-transcreate-skill/
-├── core/                    # Single source of truth
-│   ├── d-transcreate.md     # Canonical entrypoint
+├── core/                    # Canonical workflow source
+│   ├── d-transcreate.md     # Main entrypoint
 │   ├── workflows/           # 7 workflow guides
 │   ├── schemas/             # 12 artifact schemas
 │   └── prompts/             # 7 subagent role prompts
-├── adapters/                # Platform-specific thin wrappers
+├── adapters/                # Thin platform wrappers used by build_adapters.py
 ├── examples/                # Fiction, technical, and legal/policy examples
-├── scripts/                 # Validation and adapter build tooling
+├── scripts/                 # Maintainer validation/build tooling
 ├── tests/                   # Smoke tests for packaging and validation
-├── AGENTS.md                # Generic-agent bootstrap
+├── AGENTS.md                # Generic-agent bootstrap for this repo
 ├── CHANGELOG.md             # Release notes
 ├── LICENSE                  # Noncommercial license terms
 └── VERSION                  # Current version
@@ -186,8 +226,9 @@ lượng cao. Pack này tập trung vào những yếu tố làm nên bản dị
 nhất quán, giọng văn, continuity, chia chunk, kiểm tra fidelity, giữ formatting,
 và khả năng resume sau khi context bị reset.
 
-Pack hỗ trợ nhiều nền tảng agent nhưng chỉ duy trì một workflow chuẩn trong
-`core/`.
+Repo này là **source distribution pack**. Nó cố ý chứa nhiều adapter mỏng để
+cùng một skill canonical có thể cài vào nhiều agent tool khác nhau. Project
+người dùng thường chỉ cài một adapter, không copy nguyên layout repo này.
 
 ## Vì sao cần pack này
 
@@ -221,20 +262,59 @@ vững:
 | OpenCode | `adapters/opencode/` | `opencode.json` |
 | Agent bất kỳ | `adapters/generic/` | `d-transcreate.md` |
 
-## Bên trong có gì
+## Source pack khác gì skill đã cài?
+
+Repo này không cố bắt chước layout cuối cùng của một nền tảng duy nhất. Đây là
+source distribution pack với hai lớp:
+
+1. **Nguồn canonical** — `core/` chứa workflow, schema, và role prompt dùng
+   chung. Đây là nguồn chuẩn duy nhất.
+2. **Adapter theo nền tảng** — `adapters/<platform>/` chứa wrapper nhỏ cần cho
+   từng tool.
+
+Khi cài, `scripts/build_adapters.py` chọn một adapter và tạo layout đúng với
+tool đích. Người dùng thường chỉ cài một layout vào project. Với Claude Code,
+layout sẽ giống như:
+
+```text
+my-project/
+├── .claude/
+│   ├── skills/
+│   │   └── d-transcreate/
+│   │       └── SKILL.md
+│   └── agents/
+│       ├── transcreate-coordinator.md
+│       ├── terminology-researcher.md
+│       └── ...
+├── core/                    # Workflow canonical đi kèm skill
+├── README.md
+├── LICENSE
+├── VERSION
+└── .d-transcreate-manifest.json
+```
+
+Với Cursor, Codex, OpenCode, hoặc generic agent, entrypoint sẽ đổi theo chuẩn
+của tool đó, nhưng người dùng vẫn nhận một skill duy nhất dùng chung workflow
+trong `core/`. Các thư mục adapter tồn tại để phân phối cùng một skill nhất
+quán qua nhiều tool, không phải để tạo nhiều workflow khác nhau cho người dùng
+chọn.
+
+## Source repository layout
+
+Layout này dành cho maintainer của pack, không phải thứ người dùng cuối cần ghi nhớ:
 
 ```text
 d-transcreate-skill/
-├── core/                    # Nguồn chuẩn duy nhất
-│   ├── d-transcreate.md     # Entrypoint canonical
+├── core/                    # Nguồn workflow canonical
+│   ├── d-transcreate.md     # Entrypoint chính
 │   ├── workflows/           # 7 hướng dẫn workflow
 │   ├── schemas/             # 12 schema artifact
 │   └── prompts/             # 7 prompt cho subagent
-├── adapters/                # Wrapper mỏng theo nền tảng
+├── adapters/                # Wrapper mỏng cho từng tool, dùng bởi build_adapters.py
 ├── examples/                # Ví dụ fiction, kỹ thuật, pháp lý/chính sách
-├── scripts/                 # Công cụ validate và build adapter
+├── scripts/                 # Công cụ validate/build cho maintainer
 ├── tests/                   # Smoke test cho packaging và validation
-├── AGENTS.md                # Bootstrap cho generic agent
+├── AGENTS.md                # Bootstrap generic-agent cho repo này
 ├── CHANGELOG.md             # Ghi chú phát hành
 ├── LICENSE                  # Điều khoản phi thương mại
 └── VERSION                  # Phiên bản hiện tại

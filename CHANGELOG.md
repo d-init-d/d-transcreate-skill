@@ -19,6 +19,8 @@ This project follows semantic versioning.
 - Rewrite the README into a product-ready guide with clearer positioning,
   supported platforms, installation, validation, operational workflow, and
   licensing guidance.
+- Clarify that this repository is a source distribution pack: users install one
+  target adapter, while all platforms share the canonical workflow in `core/`.
 
 ## 0.1.0 — 2026-05-19
 
