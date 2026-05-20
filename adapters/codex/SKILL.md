@@ -92,7 +92,9 @@ For a substantial translation task, produce or maintain these artifacts in the w
 - Glossary
 - Style Sheet
 - Story Bible (fiction) or Domain Map (technical/legal/medical)
+- Context Plan
 - Chunk Manifest
+- Subagent Dispatch Plan (when delegating work)
 - Chunk Summaries
 - Unresolved Issues Log
 - QA Report

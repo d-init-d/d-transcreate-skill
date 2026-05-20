@@ -2,7 +2,7 @@
 
 ## Run Metadata
 - run_id: fiction-short-example-01
-- skill_version: 0.2.0
+- skill_version: 0.3.0
 - coordinator: main-agent
 - mode: hybrid
 - context_plan_ref: seed-artifacts/context-plan.md

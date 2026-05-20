@@ -2,7 +2,7 @@
 
 ## Run Metadata
 - run_id: tech-manual-example-01
-- skill_version: 0.2.0
+- skill_version: 0.3.0
 - coordinator: main-agent
 - mode: sequential
 - context_plan_ref: seed-artifacts/context-plan.md

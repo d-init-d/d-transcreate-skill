@@ -718,6 +718,18 @@ def check_c12_orchestration_content(root: Path) -> List[Finding]:
          "Coordinator prompt must reference Subagent_Dispatch_Plan"),
     ]
 
+    # Lenient content checks for top-level docs (accept underscore or space variants)
+    lenient_doc_checks = [
+        (root / "README.md", ["Context_Plan", "Context Plan", "context-plan"],
+         "README.md must reference Context_Plan (or Context Plan / context-plan)"),
+        (root / "README.md", ["Subagent_Dispatch_Plan", "Subagent Dispatch Plan", "subagent-dispatch-plan"],
+         "README.md must reference Subagent_Dispatch_Plan (or Subagent Dispatch Plan / subagent-dispatch-plan)"),
+        (root / "AGENTS.md", ["Context_Plan", "Context Plan", "context-plan"],
+         "AGENTS.md must reference Context_Plan (or Context Plan / context-plan)"),
+        (root / "AGENTS.md", ["Subagent_Dispatch_Plan", "Subagent Dispatch Plan", "subagent-dispatch-plan"],
+         "AGENTS.md must reference Subagent_Dispatch_Plan (or Subagent Dispatch Plan / subagent-dispatch-plan)"),
+    ]
+
     for filepath, keyword, message in content_checks:
         if not filepath.is_file():
             continue  # Other checks will catch missing files
@@ -725,6 +737,17 @@ def check_c12_orchestration_content(root: Path) -> List[Finding]:
             text = filepath.read_text(encoding="utf-8")
             if keyword not in text:
                 rel = filepath.relative_to(root).as_posix() if root in filepath.parents else str(filepath)
+                findings.append(Finding("C12", "error", message, rel))
+        except (UnicodeDecodeError, OSError):
+            continue
+
+    for filepath, keywords, message in lenient_doc_checks:
+        if not filepath.is_file():
+            continue
+        try:
+            text = filepath.read_text(encoding="utf-8")
+            if not any(kw in text for kw in keywords):
+                rel = filepath.relative_to(root).as_posix() if root in filepath.parents else filepath.name
                 findings.append(Finding("C12", "error", message, rel))
         except (UnicodeDecodeError, OSError):
             continue

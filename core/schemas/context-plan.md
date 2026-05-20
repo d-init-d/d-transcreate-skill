@@ -13,7 +13,7 @@ The Coordinator owns the Context Plan. Workers read it but never modify it.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `skill_version` | string | yes | Version of the d-transcreate-skill in use (e.g., `0.2.0`). Recorded for auditability. |
+| `skill_version` | string | yes | Version of the d-transcreate-skill in use (e.g., `0.3.0`). Recorded for auditability. |
 | `platform` | string | yes | Agent platform or runtime (e.g., `Claude Code`, `Codex`, `Cursor`, `OpenCode`, `Generic`). |
 | `model_or_agent` | string | no | Model or agent name if known (e.g., `claude-sonnet-4`, `gpt-5`, `unknown`). |
 | `known_context_window` | string | no | Stated context length when documented (e.g., `200k tokens`, `128k tokens`, `unknown`). |
@@ -130,7 +130,7 @@ When any trigger fires, the Coordinator SHALL:
 # Context Plan
 
 ## Identification
-- skill_version: 0.2.0
+- skill_version: 0.3.0
 - platform: Claude Code
 - model_or_agent: claude-sonnet-4 (assumed)
 - known_context_window: 200k tokens (platform stated)

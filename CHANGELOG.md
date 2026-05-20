@@ -4,6 +4,14 @@ All notable changes to this skill pack are documented here.
 
 This project follows semantic versioning.
 
+## 0.3.0 — 2026-05-19
+
+- Add context-aware orchestration with `Context_Plan` and `Subagent_Dispatch_Plan` schemas.
+- Require context planning before final chunking and dispatch planning before worker delegation.
+- Strengthen coordinator/subagent responsibilities, context slicing, overflow fallback, and sequential fallback rules.
+- Add example orchestration artifacts and validator/test coverage for the orchestration contract.
+- Polish README, AGENTS, and adapter docs to keep release documentation aligned with the new workflow.
+
 ## 0.2.0 — 2026-05-19
 
 - Change licensing from MIT to PolyForm Noncommercial 1.0.0 so the pack can be

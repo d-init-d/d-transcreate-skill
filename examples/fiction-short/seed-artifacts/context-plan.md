@@ -1,7 +1,7 @@
 # Context Plan
 
 ## Identification
-- skill_version: 0.2.0
+- skill_version: 0.3.0
 - platform: Claude Code
 - model_or_agent: claude-sonnet-4 (assumed)
 - known_context_window: 200k tokens (platform stated)

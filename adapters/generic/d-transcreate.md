@@ -39,7 +39,9 @@ All artifact templates live under `core/schemas/`. Key schemas:
 - `core/schemas/style-sheet.md`
 - `core/schemas/story-bible.md`
 - `core/schemas/domain-map.md`
+- `core/schemas/context-plan.md`
 - `core/schemas/chunk-manifest.md`
+- `core/schemas/subagent-dispatch-plan.md`
 - `core/schemas/chunk-summary.md`
 - `core/schemas/unresolved-issues.md`
 - `core/schemas/qa-report.md`
@@ -55,6 +57,10 @@ Detailed workflow instructions live under `core/workflows/`:
 - `core/workflows/qa-gates.md` — The eight mandatory QA gates.
 - `core/workflows/context-management.md` — Context budget and resume procedure.
 - `core/workflows/subagents.md` — Subagent orchestration and parallel rules.
+
+## Orchestration Contract
+
+Create a Context_Plan before final chunking. If work is delegated, create a Subagent_Dispatch_Plan before dispatching workers. If the platform has no real parallel subagents, execute the same role contract sequentially.
 
 ## Notes
 

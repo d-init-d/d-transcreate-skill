@@ -56,7 +56,7 @@ Each entry in `dispatch_units`:
 
 ```yaml
 run_id: "fiction-short-2024-01"
-skill_version: "0.2.0"
+skill_version: "0.3.0"
 coordinator: "main-agent"
 mode: sequential
 context_plan_ref: "context-plan.md"
@@ -99,7 +99,7 @@ dispatch_units:
 
 ```yaml
 run_id: "tech-manual-2024-02"
-skill_version: "0.2.0"
+skill_version: "0.3.0"
 coordinator: "main-agent"
 mode: parallel
 context_plan_ref: "context-plan.md"
@@ -142,7 +142,7 @@ dispatch_units:
 
 ```yaml
 run_id: "fiction-novel-2024-03"
-skill_version: "0.2.0"
+skill_version: "0.3.0"
 coordinator: "main-agent"
 mode: hybrid
 context_plan_ref: "context-plan.md"

@@ -24,7 +24,7 @@ The single source of truth lives under `core/`:
   - `qa-gates.md` — The 8 mandatory QA gates.
   - `context-management.md` — Context budget, chunk loading, resume procedure.
   - `subagents.md` — Readiness gate, role dispatch, parallel rules.
-- `core/schemas/` — Artifact templates (glossary, style-sheet, chunk-manifest, etc.).
+- `core/schemas/` — Artifact templates, including Context_Plan and Subagent_Dispatch_Plan.
 - `core/prompts/` — Role prompts for the seven subagent roles.
 
 ## Platform-Specific Adapters
@@ -69,9 +69,11 @@ When starting a translation task:
 2. Scan the full document and create a **Source Map**.
 3. Research terminology → build **Glossary** and **Style Sheet**.
 4. For fiction: build a **Story Bible**. For technical/legal: build a **Domain Map**.
-5. Segment into chunks by semantic boundaries → **Chunk Manifest**.
-6. Translate each chunk in multiple passes (draft → source-compare → revise → state-update).
-7. Merge chunks and run a final voice pass.
-8. Run all QA gates before delivery.
+5. Create a **Context Plan** before final chunking.
+6. Segment into chunks by semantic boundaries → **Chunk Manifest**.
+7. If delegating work, create a **Subagent Dispatch Plan** before dispatching workers.
+8. Translate each chunk in multiple passes (draft → source-compare → revise → state-update).
+9. Merge chunks and run a final voice pass.
+10. Run all QA gates before delivery.
 
 For full details, read `core/d-transcreate.md`.

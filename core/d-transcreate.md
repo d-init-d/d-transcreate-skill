@@ -1,6 +1,6 @@
 # D Transcreate — Canonical Entrypoint
 
-Version: 0.2.0
+Version: 0.3.0
 
 Use this skill to translate or transcreate long documents with controlled terminology,
 consistent voice, and durable state across context windows.

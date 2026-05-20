@@ -2,7 +2,7 @@
 
 **Production-grade translation and transcreation workflow for AI agents.**
 
-Version: **0.2.0**<br>
+Version: **0.3.0**<br>
 License: **PolyForm Noncommercial 1.0.0**<br>
 Status: **Ready to use for noncommercial projects**
 
@@ -23,8 +23,9 @@ cleanly after a context reset. This pack solves those problems by making the
 agent operate through durable artifacts:
 
 - a translation brief before work begins;
-- source maps and chunk manifests before translation;
+- source maps, context plans, and chunk manifests before translation;
 - glossaries, style sheets, story bibles, and domain maps as shared memory;
+- subagent dispatch plans when work is delegated;
 - per-chunk summaries for resumability;
 - mandatory QA gates before delivery.
 
@@ -54,7 +55,7 @@ d-transcreate-skill/
 ├── core/                    # Single source of truth
 │   ├── d-transcreate.md     # Canonical entrypoint
 │   ├── workflows/           # 7 workflow guides
-│   ├── schemas/             # 10 artifact schemas
+│   ├── schemas/             # 12 artifact schemas
 │   └── prompts/             # 7 subagent role prompts
 ├── adapters/                # Platform-specific thin wrappers
 ├── examples/                # Fiction, technical, and legal/policy examples
@@ -73,9 +74,9 @@ Every serious translation job follows the same seven phases:
 1. **Intake** — define source, target, audience, register, quality bar, and constraints.
 2. **Scan** — inspect the whole document before translating any chunk.
 3. **Research** — establish terminology, style, domain rules, and continuity facts.
-4. **Plan** — segment the source into semantic chunks and create a manifest.
+4. **Plan** — create a context plan, segment into safe semantic chunks, and create a manifest.
 5. **Translate** — draft, compare, revise, and summarize each chunk.
-6. **Coordinate** — merge chunks, resolve conflicts, and run a unified voice pass.
+6. **Coordinate** — create a dispatch plan when delegating, merge chunks, resolve conflicts, and run a unified voice pass.
 7. **QA** — run fidelity, terminology, language-quality, continuity, data, and formatting gates.
 
 The canonical entry point is `core/d-transcreate.md`.
@@ -111,10 +112,12 @@ pack version, source commit, install options, and file hashes.
    - `source-map.md`
    - `glossary.md`
    - `style-sheet.md`
+   - `context-plan.md`
    - `chunk-manifest.md`
 4. Add `story-bible.md` for narrative work or `domain-map.md` for technical/legal work.
-5. Translate chunk-by-chunk and persist chunk summaries.
-6. Run the QA gates before presenting the final output.
+5. If delegating work, create `subagent-dispatch-plan.md` before dispatching workers.
+6. Translate chunk-by-chunk and persist chunk summaries.
+7. Run the QA gates before presenting the final output.
 
 ## Validate the pack
 
@@ -128,7 +131,8 @@ python3 tests/test_pack.py
 
 The validator checks required files, adapter frontmatter, internal links,
 placeholder markers, core references, line budgets, duplicated adapter text,
-UTF-8 readability, schema references, example READMEs, and install manifests.
+UTF-8 readability, schema references, example READMEs, install manifests, and
+context/subagent orchestration references.
 
 Machine-readable output is available with:
 
@@ -144,13 +148,15 @@ python3 scripts/validate_pack.py . --json
 - [ ] `python3 tests/test_pack.py` passes.
 - [ ] All five adapters build and validate.
 - [ ] License terms match the intended distribution policy.
+- [ ] Orchestration docs mention `Context_Plan` and `Subagent_Dispatch_Plan` consistently.
 
 ## Design principles
 
 - **Single source of truth** — workflow logic lives once under `core/`.
 - **Thin adapters** — platform files point to the canonical workflow instead of duplicating it.
 - **Artifacts as state** — decisions are stored in files, not ephemeral chat history.
-- **Context-safe operation** — chunking and summaries make long projects resumable.
+- **Context-safe operation** — context plans, chunking, artifact slices, and summaries make long projects resumable.
+- **Coordinator-controlled delegation** — dispatch plans let workers operate on scoped slices while the coordinator owns final decisions.
 - **Fidelity first** — meaning, structure, facts, and register come before surface fluency.
 - **Copyright safety** — existing translations may inform terminology or style only; do not copy them.
 
@@ -170,7 +176,7 @@ See `LICENSE` for the full terms.
 
 **Workflow dịch và chuyển ngữ chuyên nghiệp cho AI agent.**
 
-Phiên bản: **0.2.0**<br>
+Phiên bản: **0.3.0**<br>
 Giấy phép: **PolyForm Noncommercial 1.0.0**<br>
 Trạng thái: **Sẵn sàng dùng cho dự án phi thương mại**
 
@@ -191,8 +197,9 @@ context. Pack này giải quyết bằng cách bắt agent làm việc qua các 
 vững:
 
 - translation brief trước khi bắt đầu;
-- source map và chunk manifest trước khi dịch;
+- source map, context plan và chunk manifest trước khi dịch;
 - glossary, style sheet, story bible, domain map làm bộ nhớ chung;
+- subagent dispatch plan khi có giao việc cho worker;
 - summary từng chunk để resume;
 - QA gates bắt buộc trước khi giao bản cuối.
 
@@ -221,7 +228,7 @@ d-transcreate-skill/
 ├── core/                    # Nguồn chuẩn duy nhất
 │   ├── d-transcreate.md     # Entrypoint canonical
 │   ├── workflows/           # 7 hướng dẫn workflow
-│   ├── schemas/             # 10 schema artifact
+│   ├── schemas/             # 12 schema artifact
 │   └── prompts/             # 7 prompt cho subagent
 ├── adapters/                # Wrapper mỏng theo nền tảng
 ├── examples/                # Ví dụ fiction, kỹ thuật, pháp lý/chính sách
@@ -240,9 +247,9 @@ Mỗi job dịch nghiêm túc đi qua 7 phase:
 1. **Intake** — xác định source, target, audience, register, quality bar, constraints.
 2. **Scan** — quét toàn tài liệu trước khi dịch bất kỳ chunk nào.
 3. **Research** — chốt thuật ngữ, style, domain rules, continuity facts.
-4. **Plan** — chia source thành chunk theo ngữ nghĩa và tạo manifest.
+4. **Plan** — tạo context plan, chia semantic chunk an toàn, và tạo manifest.
 5. **Translate** — draft, compare, revise, summarize từng chunk.
-6. **Coordinate** — merge chunk, xử lý conflict, thống nhất giọng văn.
+6. **Coordinate** — tạo dispatch plan khi giao việc, merge chunk, xử lý conflict, và chạy voice pass thống nhất.
 7. **QA** — kiểm tra fidelity, thuật ngữ, chất lượng ngôn ngữ, continuity, dữ liệu, formatting.
 
 Entrypoint chuẩn là `core/d-transcreate.md`.
@@ -278,10 +285,12 @@ nguồn, tùy chọn cài đặt, và hash file.
    - `source-map.md`
    - `glossary.md`
    - `style-sheet.md`
+   - `context-plan.md`
    - `chunk-manifest.md`
 4. Thêm `story-bible.md` cho fiction hoặc `domain-map.md` cho kỹ thuật/pháp lý.
-5. Dịch từng chunk và lưu summary.
-6. Chạy QA gates trước khi giao bản cuối.
+5. Nếu có giao việc cho worker, tạo `subagent-dispatch-plan.md` trước khi dispatch.
+6. Dịch từng chunk và lưu summary.
+7. Chạy QA gates trước khi giao bản cuối.
 
 ## Validate pack
 
@@ -295,7 +304,7 @@ python3 tests/test_pack.py
 
 Validator kiểm tra file bắt buộc, frontmatter adapter, link nội bộ, placeholder,
 reference tới core, line budget, duplicate adapter text, UTF-8, schema reference,
-README của examples, và install manifest.
+README của examples, install manifest, và reference orchestration context/subagent.
 
 Xuất JSON:
 
@@ -311,13 +320,15 @@ python3 scripts/validate_pack.py . --json
 - [ ] `python3 tests/test_pack.py` pass.
 - [ ] Cả 5 adapter build và validate được.
 - [ ] License đúng chính sách phân phối mong muốn.
+- [ ] Tài liệu orchestration nhắc đến `Context_Plan` và `Subagent_Dispatch_Plan` đồng nhất.
 
 ## Nguyên tắc thiết kế
 
 - **Nguồn chuẩn duy nhất** — workflow logic chỉ nằm trong `core/`.
 - **Adapter mỏng** — file theo nền tảng chỉ trỏ về workflow chuẩn, không duplicate logic.
 - **Artifact là state** — quyết định lưu trong file, không phụ thuộc chat history.
-- **An toàn context** — chunking và summary giúp dự án dài resume được.
+- **An toàn context** — context plan, chunking, artifact slice và summary giúp dự án dài resume được.
+- **Coordinator kiểm soát giao việc** — dispatch plan giúp worker chỉ làm trên scope được giao, coordinator giữ quyền quyết định cuối.
 - **Fidelity trước tiên** — nghĩa, cấu trúc, dữ kiện, register quan trọng hơn fluency bề mặt.
 - **An toàn bản quyền** — bản dịch có sẵn chỉ dùng để tham khảo thuật ngữ/style; không copy.
 

@@ -51,7 +51,7 @@ class PackSmokeTests(unittest.TestCase):
                     run_command(PYTHON, VALIDATE, dest)
 
                     manifest = json.loads((dest / ".d-transcreate-manifest.json").read_text())
-                    self.assertEqual(manifest["pack_version"], "0.2.0")
+                    self.assertEqual(manifest["pack_version"], "0.3.0")
                     self.assertTrue(manifest["source_commit"])
                     manifest_paths = {entry["path"] for entry in manifest["files"]}
                     self.assertTrue({"README.md", "LICENSE", "VERSION", "CHANGELOG.md"} <= manifest_paths)
