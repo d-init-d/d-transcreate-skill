@@ -8,8 +8,8 @@ The Unresolved Issues Log serves as a living record of items that require human 
 
 ## When to Create
 
-- During terminology research when a high-impact term has no high-confidence evidence (Req 7.6).
-- During chunk translation when a term is ambiguous and no glossary entry resolves it (Req 12.6).
+- During terminology research when a high-impact term has no high-confidence evidence.
+- During chunk translation when a term is ambiguous and no glossary entry resolves it.
 - During any QA gate when a defect cannot be auto-resolved.
 - Whenever a Worker_Subagent encounters an issue outside its authority.
 
@@ -61,6 +61,6 @@ File name: `unresolved-issues.md` in the workspace artifact directory.
 
 ## Cross-References
 
-- Referenced by: `core/workflows/long-document.md` (Pass D state update), `core/workflows/terminology-research.md` (Req 7.6), `core/workflows/qa-gates.md` (residual risk gate).
+- Referenced by: `core/workflows/long-document.md` (Pass D state update), `core/workflows/terminology-research.md`, `core/workflows/qa-gates.md` (residual risk gate).
 - Consumed by: `core/prompts/transcreate-coordinator.md`, `core/prompts/continuity-reviewer.md`, `core/prompts/fidelity-reviewer.md`, `core/prompts/formatting-reviewer.md`.
 - Schema location: `core/schemas/unresolved-issues.md`.

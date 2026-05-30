@@ -109,9 +109,7 @@ Use this format when the Chunk Manifest is embedded in a Markdown document (e.g.
 
 ## References
 
-- Chunk identifier pattern: Requirement 11.4
-- Column requirements: Requirement 11.5
-- Status enumeration: Requirement 11.6
+- Chunk identifier pattern, column requirements, and status enumeration: defined in the field tables above.
 - Resume procedure: `core/workflows/context-management.md`
 - Subagent dispatch rules: `core/workflows/subagents.md`
-- Schema existence validation: Requirement 21.1, 21.3
+- Schema existence validation: enforced by `scripts/validate_pack.py`

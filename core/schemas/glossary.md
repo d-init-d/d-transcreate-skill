@@ -85,8 +85,7 @@ Use this format when the Glossary is embedded in a Markdown document (e.g., for 
 
 ## References
 
-- Column requirements: Requirement 7.2
-- Status and confidence enumerations: Requirement 7.3
+- Column requirements, status, and confidence enumerations: defined in the schema tables above.
 - Source priority order: `core/workflows/terminology-research.md`
 - QA terminology gate: `core/workflows/qa-gates.md`
-- Schema existence validation: Requirement 21.1, 21.2
+- Schema existence validation: enforced by `scripts/validate_pack.py`

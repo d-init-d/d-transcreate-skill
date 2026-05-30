@@ -31,6 +31,7 @@ technical-manual/
 - The seed artifacts are pre-filled to demonstrate the expected format. In a real project, the agent would produce these during the Research phase.
 - Target language: Vietnamese (vi-VN).
 - Domain: Developer tooling / data engineering.
+- This example omits an explicit `domain-map.md` (Domain_Map); for this short sample the glossary and style sheet carry the domain terminology. A full project would build a Domain_Map during Phase 2.
 
 ## Expected Outcome
 

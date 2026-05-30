@@ -35,3 +35,5 @@ The excerpt covers data collection practices, user consent mechanisms, and data 
 ## Content Notice
 
 All source text in this example is **original content** created specifically for demonstration purposes. NovaTech Solutions is a fictional company. This policy is not derived from any real company's privacy policy or legal document.
+
+This example omits an explicit `domain-map.md` (Domain_Map); for this short excerpt the glossary captures the controlled legal terms. A full legal project would build a Domain_Map during Phase 2.

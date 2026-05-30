@@ -818,15 +818,354 @@ def check_c12_orchestration_content(root: Path) -> List[Finding]:
 
 
 # ---------------------------------------------------------------------------
+# Portable-first checks (C2A–C2D, C13–C16)
+# ---------------------------------------------------------------------------
+
+PORTABLE_PLATFORMS = ("portable", "root")
+
+
+def _find_host_agent_files(root: Path, host_dir: str) -> List[Path]:
+    """Find *.md files located in any <host_dir>/agents/ directory (source or dest layout)."""
+    results: List[Path] = []
+    for p in root.rglob("*.md"):
+        parts = p.parts
+        if ".git" in parts:
+            continue
+        for i in range(len(parts) - 2):
+            if parts[i] == host_dir and parts[i + 1] == "agents":
+                results.append(p)
+                break
+    return results
+
+
+def check_c2a_root_skill(root: Path) -> List[Finding]:
+    """C2A: Portable root SKILL.md frontmatter (skip for host-adapter destinations)."""
+    findings: List[Finding] = []
+    manifest = load_install_manifest(root)
+    if manifest is not None and manifest.get("target_platform") not in PORTABLE_PLATFORMS:
+        return findings  # host adapter destination — root SKILL.md not expected
+
+    skill = root / "SKILL.md"
+    if not skill.is_file():
+        findings.append(Finding("C2A", "error", "Portable root SKILL.md is missing", "SKILL.md"))
+        return findings
+    try:
+        text = skill.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        findings.append(Finding("C2A", "error", f"Cannot read root SKILL.md: {e}", "SKILL.md"))
+        return findings
+
+    fm = parse_frontmatter(text)
+    if not fm:
+        findings.append(Finding("C2A", "error", "Root SKILL.md has no YAML frontmatter", "SKILL.md"))
+        return findings
+    name = fm.get("name", "")
+    desc = fm.get("description", "")
+    if name != "d-transcreate":
+        findings.append(Finding("C2A", "error", f"Root SKILL.md name must be 'd-transcreate' (found: '{name}')", "SKILL.md"))
+    if not desc:
+        findings.append(Finding("C2A", "error", "Root SKILL.md frontmatter missing description", "SKILL.md"))
+    elif "translat" not in desc.lower():
+        findings.append(Finding("C2A", "error", "Root SKILL.md description lacks trigger language (translation/transcreation)", "SKILL.md"))
+    return findings
+
+
+def check_c2b_claude_agents(root: Path) -> List[Finding]:
+    """C2B: Claude agent files have name (matching stem) and description frontmatter."""
+    findings: List[Finding] = []
+    for fp in _find_host_agent_files(root, ".claude"):
+        rel = fp.relative_to(root).as_posix()
+        try:
+            fm = parse_frontmatter(fp.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, OSError) as e:
+            findings.append(Finding("C2B", "error", f"Cannot read Claude agent file: {e}", rel))
+            continue
+        if not fm:
+            findings.append(Finding("C2B", "error", "Claude agent file missing YAML frontmatter", rel))
+            continue
+        name = fm.get("name", "")
+        if not name:
+            findings.append(Finding("C2B", "error", "Claude agent frontmatter missing 'name'", rel))
+        elif name != fp.stem:
+            findings.append(Finding("C2B", "error", f"Claude agent 'name' ('{name}') must match filename stem ('{fp.stem}')", rel))
+        if not fm.get("description"):
+            findings.append(Finding("C2B", "error", "Claude agent frontmatter missing 'description'", rel))
+    return findings
+
+
+def check_c2c_opencode_agents(root: Path) -> List[Finding]:
+    """C2C: OpenCode agent files have description and mode: subagent frontmatter."""
+    findings: List[Finding] = []
+    for fp in _find_host_agent_files(root, ".opencode"):
+        rel = fp.relative_to(root).as_posix()
+        try:
+            fm = parse_frontmatter(fp.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, OSError) as e:
+            findings.append(Finding("C2C", "error", f"Cannot read OpenCode agent file: {e}", rel))
+            continue
+        if not fm:
+            findings.append(Finding("C2C", "error", "OpenCode agent file missing YAML frontmatter", rel))
+            continue
+        if not fm.get("description"):
+            findings.append(Finding("C2C", "error", "OpenCode agent frontmatter missing 'description'", rel))
+        mode = fm.get("mode", "")
+        if not mode:
+            findings.append(Finding("C2C", "error", "OpenCode agent frontmatter missing 'mode'", rel))
+        elif mode not in ("subagent", "primary", "all"):
+            findings.append(Finding("C2C", "error", f"OpenCode agent 'mode' must be subagent/primary/all (found: '{mode}')", rel))
+        elif mode != "subagent":
+            findings.append(Finding("C2C", "error", f"OpenCode role agent 'mode' must be 'subagent' (found: '{mode}')", rel))
+    return findings
+
+
+def check_c2d_opencode_config(root: Path) -> List[Finding]:
+    """C2D: opencode.json shape is valid (no top-level name/description; instructions is list)."""
+    findings: List[Finding] = []
+    for cfg in root.rglob("opencode.json"):
+        if ".git" in cfg.parts:
+            continue
+        rel = cfg.relative_to(root).as_posix()
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            findings.append(Finding("C2D", "error", f"opencode.json is not valid JSON: {e}", rel))
+            continue
+        if not isinstance(data, dict):
+            findings.append(Finding("C2D", "error", "opencode.json must be a JSON object", rel))
+            continue
+        for bad in ("name", "description"):
+            if bad in data:
+                findings.append(Finding("C2D", "error", f"opencode.json must not have top-level '{bad}'", rel))
+        if "instructions" in data:
+            instr = data["instructions"]
+            if not (isinstance(instr, list) and all(isinstance(x, str) for x in instr)):
+                findings.append(Finding("C2D", "error", "opencode.json 'instructions' must be a list of strings", rel))
+        schema = data.get("$schema")
+        if schema is not None and schema != "https://opencode.ai/config.json":
+            findings.append(Finding("C2D", "error", "opencode.json '$schema' must be https://opencode.ai/config.json", rel))
+    return findings
+
+
+def check_c13_hygiene(root: Path, release: bool) -> List[Finding]:
+    """C13: Distribution hygiene — warn in source mode, error in --release mode."""
+    findings: List[Finding] = []
+    level = "error" if release else "warning"
+    for name in ("_archive", ".kiro", "_tmp_build", "_tmp_validate"):
+        if (root / name).is_dir():
+            findings.append(Finding("C13", level, f"Distribution should not include '{name}/'", name))
+    manifest_at_root = root / ".d-transcreate-manifest.json"
+    if release and manifest_at_root.is_file() and (root / "scripts").is_dir():
+        findings.append(Finding("C13", "error", "Source tree should not contain a build manifest at root", ".d-transcreate-manifest.json"))
+    return findings
+
+
+def check_c14_examples(root: Path) -> List[Finding]:
+    """C14: Example seed artifacts have required headings, fields, and exact glossary header."""
+    findings: List[Finding] = []
+    examples_dir = root / "examples"
+    if not examples_dir.is_dir():
+        return findings
+
+    expected_header = ("term,preferred_translation,forbidden_translation,term_class,"
+                       "context,source_location,evidence,confidence,status,notes")
+    brief_headings = ["## Source", "## Target", "## Audience",
+                      "## Translation Parameters", "## Output", "## Constraints", "## Quality"]
+    cp_fields = ["skill_version", "platform", "max_source_words_per_chunk", "max_parallel_workers"]
+    dp_fields = ["run_id", "mode", "context_plan_ref", "chunk_manifest_ref"]
+
+    def read(p: Path) -> str:
+        try:
+            return p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            return ""
+
+    for ex in sorted(examples_dir.iterdir()):
+        if not ex.is_dir() or ex.name.startswith("."):
+            continue
+        seed = ex / "seed-artifacts"
+        if not seed.is_dir():
+            continue
+        seed_rel = seed.relative_to(root).as_posix()
+
+        tb = seed / "translation-brief.md"
+        if not tb.is_file():
+            findings.append(Finding("C14", "error", "Missing seed-artifacts/translation-brief.md", seed_rel))
+        else:
+            t = read(tb)
+            missing = [h for h in brief_headings if h not in t]
+            if missing:
+                findings.append(Finding("C14", "error", f"translation-brief.md missing headings: {', '.join(missing)}", tb.relative_to(root).as_posix()))
+
+        cp = seed / "context-plan.md"
+        if not cp.is_file():
+            findings.append(Finding("C14", "error", "Missing seed-artifacts/context-plan.md", seed_rel))
+        else:
+            t = read(cp)
+            missing = [f for f in cp_fields if f not in t]
+            if missing:
+                findings.append(Finding("C14", "error", f"context-plan.md missing fields: {', '.join(missing)}", cp.relative_to(root).as_posix()))
+
+        dp = seed / "subagent-dispatch-plan.md"
+        if not dp.is_file():
+            findings.append(Finding("C14", "error", "Missing seed-artifacts/subagent-dispatch-plan.md", seed_rel))
+        else:
+            t = read(dp)
+            missing = [f for f in dp_fields if f not in t]
+            if missing:
+                findings.append(Finding("C14", "error", f"subagent-dispatch-plan.md missing fields: {', '.join(missing)}", dp.relative_to(root).as_posix()))
+            if not ("Dispatch Units" in t or "dispatch_units" in t or "unit_id" in t):
+                findings.append(Finding("C14", "error", "subagent-dispatch-plan.md has no dispatch units", dp.relative_to(root).as_posix()))
+
+        gl = seed / "glossary.csv"
+        if not gl.is_file():
+            findings.append(Finding("C14", "error", "Missing seed-artifacts/glossary.csv", seed_rel))
+        else:
+            lines = read(gl).splitlines()
+            header = lines[0].strip() if lines else ""
+            if header != expected_header:
+                findings.append(Finding("C14", "error", "glossary.csv header does not match schema header", gl.relative_to(root).as_posix()))
+
+        if not (seed / "style-sheet.md").is_file():
+            findings.append(Finding("C14", "error", "Missing seed-artifacts/style-sheet.md", seed_rel))
+
+        readme_text = read(ex / "README.md").lower()
+        name_l = ex.name.lower()
+        if "fiction" in name_l:
+            if not (seed / "story-bible.md").is_file() and "story-bible" not in readme_text and "story bible" not in readme_text:
+                findings.append(Finding("C14", "warning", "Fiction example has no story-bible.md and README does not explain the omission", seed_rel))
+        elif any(k in name_l for k in ("technical", "legal", "manual", "policy", "medical")):
+            if not (seed / "domain-map.md").is_file() and "domain-map" not in readme_text and "domain map" not in readme_text:
+                findings.append(Finding("C14", "warning", "Technical/legal example has no domain-map.md and README does not explain the omission", seed_rel))
+
+    return findings
+
+
+def check_c15_version(root: Path) -> List[Finding]:
+    """C15: VERSION matches core/d-transcreate.md version line and appears in CHANGELOG.md."""
+    findings: List[Finding] = []
+    version_file = root / "VERSION"
+    if not version_file.is_file():
+        return findings  # C1 catches missing VERSION
+    try:
+        version = version_file.read_text(encoding="utf-8").strip()
+    except (UnicodeDecodeError, OSError):
+        return findings
+    if not version:
+        findings.append(Finding("C15", "error", "VERSION file is empty", "VERSION"))
+        return findings
+
+    core_dir = get_core_dir(root)
+    if core_dir:
+        entry = core_dir / "d-transcreate.md"
+        if entry.is_file():
+            try:
+                t = entry.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                t = ""
+            m = re.search(r'(?mi)^Version:\s*(.+?)\s*$', t)
+            if not m:
+                findings.append(Finding("C15", "error", "core/d-transcreate.md has no 'Version:' line", "core/d-transcreate.md"))
+            elif m.group(1).strip() != version:
+                findings.append(Finding("C15", "error", f"core/d-transcreate.md version ('{m.group(1).strip()}') does not match VERSION ('{version}')", "core/d-transcreate.md"))
+
+    changelog = root / "CHANGELOG.md"
+    if changelog.is_file():
+        try:
+            if version not in changelog.read_text(encoding="utf-8"):
+                findings.append(Finding("C15", "error", f"CHANGELOG.md has no entry for version {version}", "CHANGELOG.md"))
+        except (UnicodeDecodeError, OSError):
+            pass
+    return findings
+
+
+def check_c16_requirement_refs(root: Path, release: bool) -> List[Finding]:
+    """C16: No internal Requirement/Req N references in distributed docs (error in --release)."""
+    findings: List[Finding] = []
+    level = "error" if release else "warning"
+    pattern = re.compile(r'\b(Requirement|Req)\s+[0-9]')
+
+    targets: List[Path] = []
+    for rel in ("SKILL.md", "AGENTS.md"):
+        p = root / rel
+        if p.is_file():
+            targets.append(p)
+    for sub in ("core", "adapters", "examples"):
+        d = root / sub
+        if d.is_dir():
+            for p in d.rglob("*"):
+                if p.is_file() and p.suffix in (".md", ".mdc", ".csv", ".yaml", ".yml", ".json", ".txt"):
+                    targets.append(p)
+
+    for p in targets:
+        if ".git" in p.parts or ".kiro" in p.parts:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(text.split("\n"), 1):
+            if pattern.search(line):
+                findings.append(Finding("C16", level, f"Internal requirement reference on line {i}: {line.strip()[:80]}", p.relative_to(root).as_posix()))
+                break
+    return findings
+
+
+def check_c17_templates(root: Path) -> List[Finding]:
+    """C17: Template headers match the artifact schemas (only when templates/ exists)."""
+    findings: List[Finding] = []
+    templates = root / "templates"
+    if not templates.is_dir():
+        return findings
+
+    csv_checks = [
+        ("glossary.csv", "term,preferred_translation,forbidden_translation,term_class,"
+                         "context,source_location,evidence,confidence,status,notes"),
+        ("chunk-manifest.csv", "chunk_id,source_location,word_or_page_range,semantic_unit,"
+                              "dependencies,assigned_to,status,output_path,qa_status,notes"),
+    ]
+    for name, expected in csv_checks:
+        p = templates / name
+        if not p.is_file():
+            findings.append(Finding("C17", "error", f"Missing template: templates/{name}", f"templates/{name}"))
+            continue
+        try:
+            lines = p.read_text(encoding="utf-8").splitlines()
+        except (UnicodeDecodeError, OSError):
+            lines = []
+        if (lines[0].strip() if lines else "") != expected:
+            findings.append(Finding("C17", "error", f"templates/{name} header does not match schema", f"templates/{name}"))
+
+    tb = templates / "translation-brief.md"
+    if tb.is_file():
+        t = tb.read_text(encoding="utf-8", errors="replace")
+        missing = [h for h in ("## Source", "## Target", "## Audience", "## Output", "## Constraints", "## Quality") if h not in t]
+        if missing:
+            findings.append(Finding("C17", "error", f"templates/translation-brief.md missing headings: {', '.join(missing)}", "templates/translation-brief.md"))
+
+    cp = templates / "context-plan.md"
+    if cp.is_file():
+        t = cp.read_text(encoding="utf-8", errors="replace")
+        missing = [f for f in ("skill_version", "platform", "max_source_words_per_chunk", "max_parallel_workers") if f not in t]
+        if missing:
+            findings.append(Finding("C17", "error", f"templates/context-plan.md missing fields: {', '.join(missing)}", "templates/context-plan.md"))
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
-def run_all_checks(root: Path, line_budget: int, duplication_threshold: int) -> List[Finding]:
+def run_all_checks(root: Path, line_budget: int, duplication_threshold: int, release: bool = False) -> List[Finding]:
     """Run all validation checks and return findings."""
     findings: List[Finding] = []
 
     findings.extend(check_c1_required_files(root))
     findings.extend(check_c2_frontmatter(root))
+    findings.extend(check_c2a_root_skill(root))
+    findings.extend(check_c2b_claude_agents(root))
+    findings.extend(check_c2c_opencode_agents(root))
+    findings.extend(check_c2d_opencode_config(root))
     findings.extend(check_c3_internal_links(root))
     findings.extend(check_c4_todo_markers(root))
     findings.extend(check_c5_adapter_references_core(root))
@@ -837,6 +1176,11 @@ def run_all_checks(root: Path, line_budget: int, duplication_threshold: int) -> 
     findings.extend(check_c10_example_readme(root))
     findings.extend(check_c11_install_manifest(root))
     findings.extend(check_c12_orchestration_content(root))
+    findings.extend(check_c13_hygiene(root, release))
+    findings.extend(check_c14_examples(root))
+    findings.extend(check_c15_version(root))
+    findings.extend(check_c16_requirement_refs(root, release))
+    findings.extend(check_c17_templates(root))
 
     return findings
 
@@ -869,6 +1213,12 @@ def main() -> int:
         dest="json_output",
         help="Output results in JSON format"
     )
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        default=False,
+        help="Release mode: escalate distribution-hygiene and requirement-reference findings to errors"
+    )
 
     args = parser.parse_args()
     root = Path(args.path).resolve()
@@ -877,7 +1227,7 @@ def main() -> int:
         print(f"Error: path '{args.path}' is not a directory", file=sys.stderr)
         return 1
 
-    findings = run_all_checks(root, args.line_budget, args.duplication_threshold)
+    findings = run_all_checks(root, args.line_budget, args.duplication_threshold, args.release)
 
     errors = [f for f in findings if f.level == "error"]
     warnings = [f for f in findings if f.level == "warning"]

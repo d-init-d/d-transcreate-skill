@@ -15,6 +15,9 @@ VALIDATE = REPO_ROOT / "scripts" / "validate_pack.py"
 BUILD = REPO_ROOT / "scripts" / "build_adapters.py"
 PLATFORMS = ("codex", "claude-code", "cursor", "opencode", "generic")
 PYTHON = sys.executable
+PACK_VERSION = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+GLOSSARY_HEADER = ("term,preferred_translation,forbidden_translation,term_class,"
+                   "context,source_location,evidence,confidence,status,notes")
 
 
 def run_command(*args, check=True):
@@ -51,7 +54,7 @@ class PackSmokeTests(unittest.TestCase):
                     run_command(PYTHON, VALIDATE, dest)
 
                     manifest = json.loads((dest / ".d-transcreate-manifest.json").read_text())
-                    self.assertEqual(manifest["pack_version"], "0.3.0")
+                    self.assertEqual(manifest["pack_version"], PACK_VERSION)
                     self.assertTrue(manifest["source_commit"])
                     manifest_paths = {entry["path"] for entry in manifest["files"]}
                     self.assertTrue({"README.md", "LICENSE", "VERSION", "CHANGELOG.md"} <= manifest_paths)
@@ -162,6 +165,114 @@ class PackSmokeTests(unittest.TestCase):
                             break
                     self.assertTrue(found_context, f"Adapter {platform} must reference context management")
                     self.assertTrue(found_subagent, f"Adapter {platform} must reference subagent orchestration")
+
+    def test_root_skill_frontmatter_valid(self):
+        skill = REPO_ROOT / "SKILL.md"
+        self.assertTrue(skill.is_file(), "Portable root SKILL.md must exist")
+        text = skill.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---"), "Root SKILL.md must start with frontmatter")
+        self.assertIn("name: d-transcreate", text)
+        self.assertIn("description:", text)
+
+    def test_claude_agents_have_frontmatter(self):
+        agents_dir = REPO_ROOT / "adapters" / "claude-code" / ".claude" / "agents"
+        files = sorted(agents_dir.glob("*.md"))
+        self.assertEqual(len(files), 7, "Expected 7 Claude agent files")
+        for f in files:
+            with self.subTest(agent=f.name):
+                text = f.read_text(encoding="utf-8")
+                self.assertTrue(text.startswith("---"), f"{f.name} missing frontmatter")
+                self.assertIn(f"name: {f.stem}", text)
+                self.assertIn("description:", text)
+
+    def test_opencode_agents_have_frontmatter(self):
+        agents_dir = REPO_ROOT / "adapters" / "opencode" / ".opencode" / "agents"
+        files = sorted(agents_dir.glob("*.md"))
+        self.assertEqual(len(files), 7, "Expected 7 OpenCode agent files")
+        for f in files:
+            with self.subTest(agent=f.name):
+                text = f.read_text(encoding="utf-8")
+                self.assertTrue(text.startswith("---"), f"{f.name} missing frontmatter")
+                self.assertIn("description:", text)
+                self.assertIn("mode: subagent", text)
+
+    def test_validator_rejects_missing_claude_agent_frontmatter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            agent = repo_copy / "adapters" / "claude-code" / ".claude" / "agents" / "chunk-translator.md"
+            body = agent.read_text(encoding="utf-8").split("---", 2)[-1].lstrip()
+            agent.write_text(body, encoding="utf-8")
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C2B", result.stdout)
+
+    def test_validator_rejects_missing_opencode_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            agent = repo_copy / "adapters" / "opencode" / ".opencode" / "agents" / "chunk-translator.md"
+            agent.write_text(
+                agent.read_text(encoding="utf-8").replace("mode: subagent\n", ""),
+                encoding="utf-8",
+            )
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C2C", result.stdout)
+
+    def test_opencode_json_shape_valid(self):
+        cfg = json.loads((REPO_ROOT / "adapters" / "opencode" / "opencode.json").read_text(encoding="utf-8"))
+        self.assertNotIn("name", cfg)
+        self.assertNotIn("description", cfg)
+        self.assertIsInstance(cfg.get("instructions"), list)
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            cfg_path = repo_copy / "adapters" / "opencode" / "opencode.json"
+            cfg_path.write_text(
+                json.dumps({"name": "d-transcreate", "instructions": "core/d-transcreate.md"}),
+                encoding="utf-8",
+            )
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C2D", result.stdout)
+
+    def test_version_consistency(self):
+        core = (REPO_ROOT / "core" / "d-transcreate.md").read_text(encoding="utf-8")
+        self.assertIn(f"Version: {PACK_VERSION}", core)
+        changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn(PACK_VERSION, changelog)
+
+    def test_examples_seed_artifacts_have_required_fields(self):
+        examples_dir = REPO_ROOT / "examples"
+        for ex in sorted(examples_dir.iterdir()):
+            if not ex.is_dir() or ex.name.startswith("."):
+                continue
+            seed = ex / "seed-artifacts"
+            if not seed.is_dir():
+                continue
+            with self.subTest(example=ex.name):
+                cp = (seed / "context-plan.md").read_text(encoding="utf-8")
+                for field in ("skill_version", "platform", "max_source_words_per_chunk", "max_parallel_workers"):
+                    self.assertIn(field, cp)
+                dp = (seed / "subagent-dispatch-plan.md").read_text(encoding="utf-8")
+                for field in ("run_id", "mode", "context_plan_ref", "chunk_manifest_ref"):
+                    self.assertIn(field, dp)
+                header = (seed / "glossary.csv").read_text(encoding="utf-8").splitlines()[0].strip()
+                self.assertEqual(header, GLOSSARY_HEADER)
+
+    def test_release_hygiene_warns_or_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            archive = repo_copy / "_archive"
+            archive.mkdir(exist_ok=True)
+            (archive / "old.md").write_text("old\n", encoding="utf-8")
+            normal = run_command(PYTHON, VALIDATE, repo_copy, "--json", check=False)
+            self.assertTrue(json.loads(normal.stdout)["summary"]["passed"])
+            release = run_command(PYTHON, VALIDATE, repo_copy, "--release", check=False)
+            self.assertNotEqual(release.returncode, 0)
+            self.assertIn("C13", release.stdout)
 
 
 if __name__ == "__main__":

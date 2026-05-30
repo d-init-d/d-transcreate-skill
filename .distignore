@@ -1,0 +1,17 @@
+# Files and directories excluded from the release distribution.
+# The portable/host build script already excludes these from installs;
+# this list governs source tarball/zip release packaging.
+
+.git/
+.gitignore
+.gitattributes
+.distignore
+.github/
+_archive/
+.kiro/
+__pycache__/
+*.pyc
+.pytest_cache/
+_tmp_build/
+_tmp_validate/
+.d-transcreate-manifest.json

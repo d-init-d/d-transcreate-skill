@@ -1,79 +1,78 @@
 # D Transcreate Skill
 
-This project is a translation and transcreation skill pack for long documents.
-Use it when you need to translate books, technical manuals, legal texts, fiction,
-scripts, or any substantial document with controlled terminology, consistent voice,
-and durable state across sessions.
+This repository is a portable translation and transcreation skill package for AI agents. Use it for books, manuals, legal or policy texts, fiction, scripts, subtitles, technical documentation, or any substantial source material that needs controlled terminology, preserved structure, context-safe chunking, durable artifacts, and audit-ready QA.
 
-## Getting Started
+## Portable Entry Point
 
-1. Read `core/d-transcreate.md` for the canonical workflow and operating principles.
-2. Follow the seven-phase workflow: Intake → Scan → Research → Plan → Translate → Merge → QA.
-3. Persist all decisions as workspace artifacts (files on disk), not in chat history.
+Start at the root `SKILL.md` in any runtime that supports skills. If the host loads instruction files instead, this `AGENTS.md` provides the same portable bootstrap and points to the canonical workflow in `core/d-transcreate.md`.
+
+Platform adapters under `adapters/` are optional compatibility layers for host-native discovery. They do not change the workflow or artifact contract.
+
+## Core Workflow
+
+1. Read `core/d-transcreate.md` for operating principles and the seven-phase workflow.
+2. Follow the phase sequence: Intake → Scan → Research → Plan → Translate → Coordinate → QA.
+3. Persist all decisions as workspace artifacts on disk, not in chat history.
+4. If subagents are available, dispatch scoped roles through `Subagent_Dispatch_Plan`.
+5. If subagents are unavailable, run the same role contract sequentially; the artifacts remain mandatory for resume and auditability.
 
 ## Core Library
 
 The single source of truth lives under `core/`:
 
-- `core/d-transcreate.md` — Canonical entrypoint with operating principles and workflow overview.
-- `core/workflows/` — Detailed workflow guides:
-  - `long-document.md` — Full phase-by-phase staged workflow.
-  - `terminology-research.md` — Term mining, source priority, evidence rules.
-  - `fiction-continuity.md` — Story Bible, reveal timing, character voice.
-  - `technical-domain.md` — Domain Map, acronyms, units, standards.
-  - `qa-gates.md` — The 8 mandatory QA gates.
-  - `context-management.md` — Context budget, chunk loading, resume procedure.
-  - `subagents.md` — Readiness gate, role dispatch, parallel rules.
-- `core/schemas/` — Artifact templates, including Context_Plan and Subagent_Dispatch_Plan.
-- `core/prompts/` — Role prompts for the seven subagent roles.
+- `core/d-transcreate.md` — canonical entrypoint with operating principles and workflow overview.
+- `core/workflows/long-document.md` — phase-by-phase staged workflow.
+- `core/workflows/terminology-research.md` — term mining, source priority, evidence rules.
+- `core/workflows/fiction-continuity.md` — Story_Bible, reveal timing, character voice.
+- `core/workflows/technical-domain.md` — Domain_Map, acronyms, units, standards.
+- `core/workflows/context-management.md` — context budget, chunk loading, resume procedure.
+- `core/workflows/subagents.md` — readiness gate, dispatch rules, sequential fallback.
+- `core/workflows/qa-gates.md` — the eight mandatory QA gates.
+- `core/schemas/` — artifact contracts and templates.
+- `core/prompts/` — runtime-neutral role prompts.
 
-## Platform-Specific Adapters
+## Required Artifacts
 
-If your platform has a dedicated adapter, use it for optimized integration:
+Create or maintain these files during a substantial translation run:
+
+- Translation_Brief and Source_Map
+- Glossary and Style_Sheet
+- Story_Bible for narrative work, or Domain_Map for technical/legal/domain-heavy work
+- Context_Plan before final chunking
+- Chunk_Manifest as the authoritative status ledger
+- Subagent_Dispatch_Plan before delegation, or before simulating delegation sequentially
+- Chunk_Summary entries and Unresolved_Issues_Log
+- QA_Report before delivery
+
+## Optional Host Adapters
+
+Use adapters only when the host benefits from native files:
 
 | Platform | Adapter location | Entrypoint |
-|----------|-----------------|------------|
-| Codex | `adapters/codex/` | `SKILL.md` |
-| Claude Code | `adapters/claude-code/` | `CLAUDE.md` |
-| Cursor | `adapters/cursor/` | `.cursor/rules/d-transcreate.mdc` |
+|----------|------------------|------------|
+| Portable | root | `SKILL.md` |
+| Claude Code | `adapters/claude-code/` | `.claude/skills/d-transcreate/SKILL.md` |
 | OpenCode | `adapters/opencode/` | `AGENTS.md` + `opencode.json` |
+| Cursor | `adapters/cursor/` | `.cursor/rules/d-transcreate.mdc` |
+| Codex | `adapters/codex/` | `SKILL.md` |
 | Generic | `adapters/generic/` | `AGENTS.md` + `d-transcreate.md` |
 
-Each adapter is a template layout. To install into a consumer project, use:
+Install a portable or host-native layout with:
 
 ```bash
-python scripts/build_adapters.py --platform <name> --dest <path>
+python scripts/build_adapters.py --platform <portable|claude-code|opencode|cursor|codex|generic> --dest <path>
 ```
-
-Or manually copy the adapter folder contents into your project root.
 
 ## Subagent Roles
 
-The skill defines seven fixed roles that can be dispatched as subagents:
+The skill defines seven fixed roles. Workers propose; the coordinator approves and writes global artifacts.
 
-1. **Transcreate Coordinator** — Final authority on glossary, style, voice, continuity, and merge.
-2. **Terminology Researcher** — Mines and proposes terms; never writes global glossary directly.
-3. **Style Researcher** — Researches target-language conventions; proposes style rules.
-4. **Chunk Translator** — Owns one chunk through the multi-pass translation cycle.
-5. **Continuity Reviewer** — Checks cross-chunk consistency and story/domain continuity.
-6. **Fidelity Reviewer** — Checks source faithfulness (omissions, additions, distortions).
-7. **Formatting Reviewer** — Checks structural and formatting integrity.
+1. **Transcreate Coordinator** — final authority on glossary, style, voice, continuity, merge, and QA.
+2. **Terminology Researcher** — mines and proposes evidence-backed terms.
+3. **Style Researcher** — proposes target-language style and register rules.
+4. **Chunk Translator** — translates one assigned chunk through the multi-pass cycle.
+5. **Continuity Reviewer** — flags cross-chunk story or domain continuity defects.
+6. **Fidelity Reviewer** — flags omissions, additions, distortions, and formal-data mismatches.
+7. **Formatting Reviewer** — flags structure, layout, table, link, citation, and code-block defects.
 
-Role prompts are at `core/prompts/<role-name>.md`.
-
-## Quick Reference
-
-When starting a translation task:
-
-1. Produce a **Translation Brief** before translating anything.
-2. Scan the full document and create a **Source Map**.
-3. Research terminology → build **Glossary** and **Style Sheet**.
-4. For fiction: build a **Story Bible**. For technical/legal: build a **Domain Map**.
-5. Create a **Context Plan** before final chunking.
-6. Segment into chunks by semantic boundaries → **Chunk Manifest**.
-7. If delegating work, create a **Subagent Dispatch Plan** before dispatching workers.
-8. Translate each chunk in multiple passes (draft → source-compare → revise → state-update).
-9. Merge chunks and run a final voice pass.
-10. Run all QA gates before delivery.
-
-For full details, read `core/d-transcreate.md`.
+For full details, read `core/d-transcreate.md` and the referenced workflow files on demand.

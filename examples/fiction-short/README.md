@@ -35,3 +35,5 @@ The story follows a young cartographer named Seren who discovers a magical lante
 ## Content Notice
 
 All source text in this example is **original fiction** created specifically for demonstration purposes. It is not derived from any published work.
+
+This example omits an explicit `story-bible.md` (Story_Bible); for a 3-scene sample the glossary and style sheet capture the needed continuity terms. A full-length fiction project would build a Story_Bible during Phase 2.

@@ -1,0 +1,25 @@
+run_id: ""
+skill_version: ""
+coordinator: "coordinator"
+mode: sequential          # sequential | parallel | hybrid
+context_plan_ref: "context-plan.md"
+chunk_manifest_ref: "chunk-manifest.csv"
+global_artifact_owner: "coordinator"
+max_parallel_workers: 1
+merge_policy: ""
+qa_policy: ""
+fallback_policy: ""
+dispatch_units:
+  - unit_id: ""
+    role: ""               # one of the seven role names
+    assigned_to: "coordinator"
+    scope: ""
+    chunk_ids: []
+    dependencies: []
+    input_files: []
+    artifact_slices: []
+    allowed_write_paths: []
+    forbidden_write_paths: []
+    output_contract: ""
+    status: planned        # planned | dispatched | in_progress | completed | failed | blocked
+    return_path: ""

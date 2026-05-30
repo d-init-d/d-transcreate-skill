@@ -1,4 +1,0 @@
-interface:
-  display_name: "D Transcreate"
-  short_description: "Faithful translation workflow for long documents"
-  default_prompt: "Use $d-transcreate-skill to translate this book or document with terminology research, style control, and continuity tracking."

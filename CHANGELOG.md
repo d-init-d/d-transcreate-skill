@@ -4,6 +4,16 @@ All notable changes to this skill pack are documented here.
 
 This project follows semantic versioning.
 
+## 0.4.0 — 2026-05-30
+
+- Add portable root `SKILL.md` entrypoint so the repo works as a portable skill without choosing a host adapter.
+- Make host adapters optional compatibility layers and keep `core/` runtime-neutral.
+- Add Claude Code and OpenCode subagent frontmatter, and fix the OpenCode `opencode.json` config shape.
+- Add a portable install target, atomic staging, and a validate-after-build option to the build script.
+- Expand validator coverage: root skill and agent frontmatter, OpenCode config shape, example artifacts, template headers, version consistency, distribution hygiene, and internal requirement references (with a `--release` gate).
+- Add blank artifact templates under `templates/`, CI workflow, and release packaging metadata.
+- Remove internal requirement references from distributed core docs.
+
 ## 0.3.0 — 2026-05-19
 
 - Add context-aware orchestration with `Context_Plan` and `Subagent_Dispatch_Plan` schemas.

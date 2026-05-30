@@ -2,9 +2,9 @@
 
 The Style Sheet records all voice, register, and language-convention decisions for a translation project. It is produced during the Research phase (Phase 3) and consumed by every chunk translation pass, the merge/voice pass, and QA gates.
 
-The Translation_Agent populates this artifact by researching target-language style conventions for the relevant genre or domain. Each non-trivial decision must include a rationale and source observation in the notes (Req 8.4).
+The Translation_Agent populates this artifact by researching target-language style conventions for the relevant genre or domain. Each non-trivial decision must include a rationale and source observation in the notes (style rationale).
 
-**Copyright rule:** Existing translations may inform style observations only. Do not reproduce extended passages from copyrighted translations. Record paraphrased observations with short attributed evidence quotes (Req 18).
+**Copyright rule:** Existing translations may inform style observations only. Do not reproduce extended passages from copyrighted translations. Record paraphrased observations with short attributed evidence quotes.
 
 ---
 
@@ -156,7 +156,7 @@ The Translation_Agent populates this artifact by researching target-language sty
 ## Usage Notes
 
 1. **Populate incrementally.** Not all fields apply to every project. Leave inapplicable fields blank or mark "N/A".
-2. **Document rationale.** Each Notes sub-section captures why a decision was made and what source observation informed it (Req 8.4).
+2. **Document rationale.** Each Notes sub-section captures why a decision was made and what source observation informed it (style rationale).
 3. **Propose, don't overwrite.** Worker_Subagents propose Style_Sheet changes; only the Coordinator approves and writes final entries.
 4. **Reference, don't inline.** Workflow and prompt files reference this schema by path (`core/schemas/style-sheet.md`); they do not duplicate its content.
 5. **Keep living.** The Style_Sheet is updated during Pass D (state-update) of each chunk translation when new style decisions emerge.

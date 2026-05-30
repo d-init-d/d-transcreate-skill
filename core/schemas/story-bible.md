@@ -4,7 +4,7 @@ The Story Bible is the continuity-tracking artifact for fiction, memoir, narrati
 
 ## When to Create
 
-The Translation_Agent SHALL create and maintain a Story_Bible when the source is classified as fiction, memoir, narrative non-fiction, script, game, or comic (Requirement 9.1).
+The Translation_Agent SHALL create and maintain a Story_Bible when the source is classified as fiction, memoir, narrative non-fiction, script, game, or comic.
 
 ## Form
 
@@ -99,9 +99,9 @@ Tracks how characters address each other — critical for languages with complex
 ## Maintenance Rules
 
 1. The Story_Bible is created during Phase 2 (Whole-Document Scan) with initial entries from the cast list, relationships, timeline, and locations detected in the source.
-2. When a chunk introduces a new character, place, relationship, or motif, the Translation_Agent SHALL update the Story_Bible after translating that chunk (Requirement 9.5).
-3. When a character is referenced in a chunk being translated, the Translation_Agent SHALL load the relevant Story_Bible rows into context for that chunk (Requirement 9.3).
-4. When the source contains a hidden relationship, gender, twist, or worldbuilding fact revealed later, the Translation_Agent SHALL choose target-language wording that does not expose the reveal earlier than the source (Requirement 9.4).
+2. When a chunk introduces a new character, place, relationship, or motif, the Translation_Agent SHALL update the Story_Bible after translating that chunk.
+3. When a character is referenced in a chunk being translated, the Translation_Agent SHALL load the relevant Story_Bible rows into context for that chunk.
+4. When the source contains a hidden relationship, gender, twist, or worldbuilding fact revealed later, the Translation_Agent SHALL choose target-language wording that does not expose the reveal earlier than the source.
 5. The Coordinator_Subagent holds final authority over Story_Bible updates when subagents are active. Worker_Subagents propose updates; the coordinator approves.
 
 ## Usage

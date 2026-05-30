@@ -1,0 +1,25 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile scripts and tests
+        run: python -m py_compile scripts/validate_pack.py scripts/build_adapters.py tests/test_pack.py
+      - name: Validate source pack
+        run: python scripts/validate_pack.py . --json
+      - name: Run test suite
+        run: python tests/test_pack.py
+      - name: Build and validate every adapter target
+        run: |
+          for platform in portable codex claude-code cursor opencode generic; do
+            python scripts/build_adapters.py --platform "$platform" --dest "_tmp_build/$platform" --force
+          done

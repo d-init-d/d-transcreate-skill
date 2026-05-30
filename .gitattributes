@@ -1,0 +1,7 @@
+# Exclude internal and dev-only paths from `git archive` release tarballs.
+_archive/ export-ignore
+.kiro/ export-ignore
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.distignore export-ignore

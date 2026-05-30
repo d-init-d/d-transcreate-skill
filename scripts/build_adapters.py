@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-VALID_PLATFORMS = ("codex", "claude-code", "cursor", "opencode", "generic")
+VALID_PLATFORMS = ("portable", "codex", "claude-code", "cursor", "opencode", "generic")
 VALID_MODES = ("copy", "symlink", "dry-run")
 VALID_CORE_STRATEGIES = ("copy", "reference")
 MANIFEST_FILENAME = ".d-transcreate-manifest.json"
@@ -90,6 +91,36 @@ def collect_files(directory):
             full = Path(root) / fname
             results.append(full.relative_to(directory))
     return sorted(results)
+
+
+PORTABLE_ROOT_FILES = ("SKILL.md", "AGENTS.md")
+
+
+def collect_portable_files(repo_root):
+    """
+    Collect the portable root file set (relative to repo_root): the root
+    SKILL.md, AGENTS.md, and any templates/ files. core/ and metadata files
+    are handled separately by the standard copy logic.
+    """
+    results = []
+    for name in PORTABLE_ROOT_FILES:
+        if (repo_root / name).is_file():
+            results.append(Path(name))
+    templates_dir = repo_root / "templates"
+    if templates_dir.is_dir():
+        for rel in collect_files(templates_dir):
+            results.append(Path("templates") / rel)
+    return results
+
+
+def promote_staging(staging, dest):
+    """Copy every file staged under `staging` into `dest`, preserving layout."""
+    for src in sorted(staging.rglob("*")):
+        if src.is_file():
+            rel = src.relative_to(staging)
+            dst = dest / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
 
 
 def rewrite_core_references(content, shared_core_path):
@@ -440,6 +471,19 @@ def build_parser():
         default=False,
         help="Overwrite existing files without conflict check.",
     )
+    parser.add_argument(
+        "--validate-after-build",
+        dest="validate_after_build",
+        action="store_true",
+        default=True,
+        help="Run validate_pack.py against the destination after building (default: on).",
+    )
+    parser.add_argument(
+        "--no-validate-after-build",
+        dest="validate_after_build",
+        action="store_false",
+        help="Skip post-build validation.",
+    )
     return parser
 
 
@@ -455,26 +499,29 @@ def main():
         sys.exit(EXIT_ERROR)
 
     repo_root = get_repo_root()
-    adapter_dir = repo_root / "adapters" / args.platform
     core_dir = repo_root / "core"
     dest = Path(args.dest).resolve()
-
-    # Validate source directories exist
-    if not adapter_dir.is_dir():
-        print(f"ERROR: Adapter directory not found: {adapter_dir}", file=sys.stderr)
-        sys.exit(EXIT_ERROR)
 
     if not core_dir.is_dir():
         print(f"ERROR: Core directory not found: {core_dir}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
-    # Collect files
-    adapter_files = collect_files(adapter_dir)
+    # Resolve the installable file set for the requested platform.
+    if args.platform == "portable":
+        adapter_dir = repo_root
+        adapter_files = collect_portable_files(repo_root)
+    else:
+        adapter_dir = repo_root / "adapters" / args.platform
+        if not adapter_dir.is_dir():
+            print(f"ERROR: Adapter directory not found: {adapter_dir}", file=sys.stderr)
+            sys.exit(EXIT_ERROR)
+        adapter_files = collect_files(adapter_dir)
+
     core_files = collect_files(core_dir) if args.core_strategy == "copy" else []
     metadata_files = [Path(p) for p in METADATA_FILES if (repo_root / p).is_file()]
 
     if not adapter_files:
-        print(f"ERROR: No files found in adapter directory: {adapter_dir}",
+        print(f"ERROR: No installable files found for platform: {args.platform}",
               file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
@@ -502,26 +549,47 @@ def main():
     # Create destination directory
     dest.mkdir(parents=True, exist_ok=True)
 
-    # Execute the operation
+    # Execute the operation. Copy mode prepares a full staging tree first, then
+    # promotes it into the destination only after all staged files are ready.
     if args.mode == "copy":
-        file_records = execute_copy(
-            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-            args.core_strategy, args.shared_core_path, args.force,
-        )
+        staging = Path(tempfile.mkdtemp(prefix="dtc-staging-"))
+        try:
+            file_records = execute_copy(
+                adapter_dir, adapter_files, core_dir, core_files, metadata_files, staging,
+                args.core_strategy, args.shared_core_path, args.force,
+            )
+            write_manifest(
+                staging, args.platform, args.mode, args.core_strategy,
+                args.shared_core_path, file_records,
+            )
+            promote_staging(staging, dest)
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        manifest_path = dest / MANIFEST_FILENAME
     elif args.mode == "symlink":
         file_records = execute_symlink(
             adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
             args.core_strategy, args.shared_core_path, args.force,
         )
+        manifest_path = write_manifest(
+            dest, args.platform, args.mode, args.core_strategy,
+            args.shared_core_path, file_records,
+        )
     else:
         print(f"ERROR: Unknown mode: {args.mode}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
-    # Write manifest
-    manifest_path = write_manifest(
-        dest, args.platform, args.mode, args.core_strategy,
-        args.shared_core_path, file_records,
-    )
+    # Optional post-build validation
+    if args.validate_after_build:
+        validator = repo_root / "scripts" / "validate_pack.py"
+        result = subprocess.run(
+            [sys.executable, str(validator), str(dest)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print("ERROR: post-build validation failed:", file=sys.stderr)
+            sys.stderr.write(result.stdout)
+            sys.exit(EXIT_ERROR)
 
     # Summary
     print(f"Successfully installed {args.platform} adapter to: {dest}")
@@ -529,6 +597,8 @@ def main():
     print(f"  Core strategy: {args.core_strategy}")
     print(f"  Files written: {len(file_records)}")
     print(f"  Manifest: {manifest_path}")
+    if args.validate_after_build:
+        print("  Post-build validation: PASSED")
 
     sys.exit(EXIT_SUCCESS)
 
