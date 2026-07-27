@@ -80,7 +80,7 @@ Use this format when the Glossary is embedded in a Markdown document (e.g., for 
 3. **Proposals**: Worker_Subagents propose new entries or edits by returning structured proposals in their output. The Coordinator_Subagent reviews and either approves (setting `status` to `approved`) or rejects.
 4. **QA enforcement**: The terminology QA gate verifies that every `approved` entry is applied consistently across all chunks and that no `forbidden_translation` value appears in the output.
 5. **Conflict resolution**: When multiple sources disagree, record both candidates with their evidence. The Coordinator resolves based on the source priority order defined in `core/workflows/terminology-research.md`.
-6. **Unresolved terms**: If a term is high-impact and no high-confidence evidence is found, set `status` to `needs-review` and add an entry to the Unresolved_Issues_Log.
+6. **Unresolved terms**: If a term is high-impact and no high-confidence evidence is found, set `status` to `needs-review` and report it as an unresolved item; the Coordinator adds the entry to the Unresolved_Issues_Log.
 7. **Low-impact terms**: If research yields no new candidates for a low-impact term, mark it as `proposed` with `confidence: low` and continue translation rather than blocking.
 
 ## References

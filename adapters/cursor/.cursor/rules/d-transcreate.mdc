@@ -78,7 +78,7 @@ If Cursor does not support real parallel subagents, execute the same role contra
 - Per chunk, load only: brief, glossary slice, style rules, story bible/domain map excerpt,
   previous + next chunk summaries, current source chunk, and relevant unresolved issues.
 - After completing a chunk, write a compact summary and unload the raw source.
-- On context reset, re-open the chunk manifest first, then brief, style sheet, glossary,
-  and current chunk source.
+- On context reset, re-open the chunk manifest first, then the context plan, then brief,
+  style sheet, glossary, and current chunk source.
 
 See `core/workflows/context-management.md` for the full resume procedure.

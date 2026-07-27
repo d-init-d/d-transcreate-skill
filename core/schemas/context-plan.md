@@ -24,8 +24,8 @@ The Coordinator owns the Context Plan. Workers read it but never modify it.
 | `artifact_slice_policy` | string | yes | Description of how Glossary/Style_Sheet/Story_Bible/Domain_Map slices are selected per chunk. |
 | `reserved_input_budget` | string | yes | Portion of context reserved for source chunk + artifact slices (typical: 60–70%). |
 | `reserved_output_budget` | string | yes | Portion of context reserved for the translated output (typical: 20–30%). |
-| `reserved_qa_budget` | string | yes | Portion of context reserved for source-compare and revision passes (typical: 10–15%). |
-| `safety_margin` | string | yes | Unused buffer to absorb unexpected expansion (typical: 10–15%). |
+| `reserved_qa_budget` | string | yes | Portion of context reserved for source-compare and revision passes (typical: 5–15%). |
+| `safety_margin` | string | yes | Unused buffer to absorb unexpected expansion (typical: 5–15%). |
 | `max_parallel_workers` | integer | yes | Maximum number of Worker_Subagents allowed to run concurrently for this run. |
 | `fallback_triggers` | list | yes | Conditions that force smaller chunks or sequential mode (see Fallback Triggers below). |
 | `notes` | string | no | Run-specific constraints, observations, or platform quirks. |

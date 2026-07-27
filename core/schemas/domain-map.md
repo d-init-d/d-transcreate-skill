@@ -90,7 +90,7 @@ Create a Domain_Map when the source is classified as any of:
 1. **Initial population** — populate during Phase 2 (Whole-Document Scan) based on the source material and Source_Map technical extensions.
 2. **Per-chunk updates** — after translating each chunk (Pass D), add any new concepts or acronyms introduced in that chunk before marking the chunk complete.
 3. **Consistency enforcement** — when a chunk references a concept or acronym already in the Domain_Map, apply the preferred translation recorded there. Do not introduce variant translations without updating the entry.
-4. **Conflict resolution** — if a chunk uses a term in a new sense not covered by the existing entry, flag it in the Unresolved_Issues_Log and propose a Domain_Map update rather than silently diverging.
+4. **Conflict resolution** — if a chunk uses a term in a new sense not covered by the existing entry, flag it as an `unresolved_items` proposal (the Coordinator records it in the Unresolved_Issues_Log) and propose a Domain_Map update rather than silently diverging.
 
 ## Usage
 

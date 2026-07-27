@@ -219,7 +219,7 @@ Translate the chunk using the current Translation_Brief, Glossary, Style_Sheet, 
 - Preserve all meaning-bearing details.
 - Keep paragraph order unless the output format explicitly allows adaptation.
 - Preserve numbers, names, citations, references, and quoted material with extra care.
-- Do not resolve ambiguous terms by guessing — mark them for review and add to the Unresolved_Issues_Log.
+- Do not resolve ambiguous terms by guessing — mark them for review and report them as `unresolved_items` (the Coordinator records them in the Unresolved_Issues_Log).
 
 ### Pass B: Source Compare
 

@@ -32,7 +32,7 @@ Return a structured response containing ALL of the following fields:
   - `pattern` — description of the pattern to prohibit
   - `reason` — why this pattern is inappropriate for the target text
   - `evidence_source` — source of the observation
-- **unresolved_items**: Array of items to add to the Unresolved_Issues_Log, each containing:
+- **unresolved_items**: Array of proposed entries for the Unresolved_Issues_Log (recorded by the Coordinator; you never write the log), each containing:
   - `id` — suggested identifier
   - `location` — where in the source the style question arises
   - `issue` — description of the unresolved style question
@@ -90,6 +90,7 @@ Return a structured response containing ALL of the following fields:
 ## Boundaries
 
 - **Never write the global Style_Sheet directly.** All entries are proposals returned to the Coordinator for review and approval.
+- **Never write the Unresolved_Issues_Log directly.** Return proposed entries in `unresolved_items`; the Coordinator writes the log.
 - **Never set status to `approved`.** Only the Coordinator may approve entries. Use `proposed` or `needs-review` only.
 - **Never translate chunks.** Your scope is style research, not translation.
 - **Never make terminology decisions.** Terminology belongs to the terminology-researcher role. You may observe how terms of address affect style, but term choices are not yours to make.

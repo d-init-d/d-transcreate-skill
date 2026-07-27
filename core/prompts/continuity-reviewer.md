@@ -32,7 +32,7 @@ Return a structured response containing ALL of the following fields:
   - `expected` — what the Story_Bible, Domain_Map, Glossary, or previous chunk establishes
   - `found` — what the reviewed chunk actually contains
   - `evidence` — reference to the artifact entry or chunk that establishes the correct state (e.g., "Story_Bible characters table, row 'Minh'", "Chunk_Summary ch02-sec01")
-- **unresolved_items**: Array of items to add to the Unresolved_Issues_Log, each containing:
+- **unresolved_items**: Array of proposed entries for the Unresolved_Issues_Log (recorded by the Coordinator; you never write the log), each containing:
   - `id` — suggested identifier (e.g., `UI-015`)
   - `location` — chunk_id and paragraph/sentence reference
   - `issue` — description of the continuity problem

@@ -89,7 +89,7 @@ The target text must not reveal a hidden relationship, gender, twist, identity, 
 3. **After the reveal point**: once the source has disclosed the fact, the translator may use explicit target-language forms freely in subsequent chunks.
 
 4. **Edge cases**:
-   - If the target language grammatically forces a reveal (e.g., gendered verb agreement), record the conflict in the Unresolved_Issues_Log and propose the least-revealing alternative.
+   - If the target language grammatically forces a reveal (e.g., gendered verb agreement), report the conflict as an unresolved item (the Coordinator records it in the Unresolved_Issues_Log) and propose the least-revealing alternative.
    - If no satisfactory ambiguous construction exists, flag the issue for human review before finalizing.
 
 ## Character Voice Consistency

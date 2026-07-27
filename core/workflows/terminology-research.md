@@ -55,7 +55,7 @@ When sources disagree:
 - Record both candidates with their evidence in the Glossary `notes` field.
 - Choose based on source quality, publication date, audience fit, and target-market convention.
 - Keep the conflict visible; do not silently discard the alternative.
-- If the term is high impact and no high-confidence evidence is found, mark it `needs-review` and add it to the Unresolved_Issues_Log.
+- If the term is high impact and no high-confidence evidence is found, mark it `needs-review` and route it to the Unresolved_Issues_Log (dispatched researchers return it as an `unresolved_items` proposal; the Coordinator writes the entry).
 
 ## d-research Integration
 
@@ -86,7 +86,7 @@ If `d-research-skill` is not accessible or has been disabled, the Translation_Ag
 2. If no search tools are available, rely on the agent's training knowledge and clearly mark confidence as `medium` or `low` for terms that cannot be verified against a live source.
 3. Apply the Source Priority Order above to any evidence found.
 4. Record the research method used (e.g., "agent knowledge only — no live search available") in the Glossary `evidence` column.
-5. Mark unverified high-impact terms as `needs-review` in the Glossary and add them to the Unresolved_Issues_Log.
+5. Mark unverified high-impact terms as `needs-review` in the Glossary and route them to the Unresolved_Issues_Log (dispatched researchers return them as `unresolved_items` proposals; the Coordinator writes the entries).
 
 The translation workflow MUST NOT block on the absence of `d-research-skill`. The pack does not declare `d-research-skill` as a hard dependency.
 
@@ -136,7 +136,7 @@ Stop researching a term when one of these conditions is met:
 4. The term is low impact and can be marked as provisional (`proposed` status, `medium` or `low` confidence) without blocking translation.
 5. The user explicitly asks to prioritize speed over research depth.
 
-Do not block translation indefinitely on low-impact terms. Mark them as provisional and continue. High-impact unresolved terms go to the Unresolved_Issues_Log.
+Do not block translation indefinitely on low-impact terms. Mark them as provisional and continue. High-impact unresolved terms go to the Unresolved_Issues_Log via the Coordinator.
 
 ## Schema Reference
 

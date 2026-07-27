@@ -57,7 +57,7 @@ When a chunk references a concept or acronym already present in the Domain_Map:
 
 - Apply the preferred translation recorded there.
 - Do not introduce variant translations without updating the Domain_Map entry.
-- If the source uses the term in a new sense not covered by the existing entry, flag it in the Unresolved_Issues_Log and propose a Domain_Map update rather than silently diverging.
+- If the source uses the term in a new sense not covered by the existing entry, flag it as an `unresolved_items` proposal (the Coordinator records it in the Unresolved_Issues_Log) and propose a Domain_Map update rather than silently diverging.
 
 ## Acronym Handling
 

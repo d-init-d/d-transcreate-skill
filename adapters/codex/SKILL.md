@@ -99,6 +99,6 @@ For short tasks, apply the same logic mentally and return only the translated te
 - Never load the full source document into context unless it genuinely fits with room for QA.
 - Per chunk, load only: brief, glossary slice, style rules, story bible/domain map excerpt, previous + next chunk summaries, current source chunk, and relevant unresolved issues.
 - After completing a chunk, write a compact summary and unload the raw source.
-- On context reset, re-open the chunk manifest first, then brief, style sheet, glossary, and current chunk source.
+- On context reset, re-open the chunk manifest first, then the context plan, then brief, style sheet, glossary, and current chunk source.
 
 See `core/workflows/context-management.md` for the full resume procedure.

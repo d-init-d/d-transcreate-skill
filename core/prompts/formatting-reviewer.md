@@ -30,7 +30,7 @@ Return a structured response containing ALL of the following fields:
   - `expected` — what the correct formatting should look like (based on source structure or Translation_Brief spec)
   - `actual` — what was found in the translated output
   - `source_reference` — corresponding location in the source for comparison
-- **unresolved_items**: Array of items to add to the Unresolved_Issues_Log, each containing:
+- **unresolved_items**: Array of proposed entries for the Unresolved_Issues_Log (recorded by the Coordinator; you never write the log), each containing:
   - `id` — suggested identifier (format: `UI-FMT-<sequential>`)
   - `location` — chunk_id and specific location
   - `issue` — description of the formatting problem that cannot be auto-resolved

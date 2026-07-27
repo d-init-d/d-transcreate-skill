@@ -30,7 +30,7 @@ Return a structured response containing ALL of the following fields:
   - `confidence` — one of: `high`, `medium`, `low`
   - `status` — one of: `proposed`, `needs-review`
   - `notes` — rationale, alternative candidates considered, influence sources, conflicts
-- **unresolved_items**: Array of items to add to the Unresolved_Issues_Log, each containing:
+- **unresolved_items**: Array of proposed entries for the Unresolved_Issues_Log (recorded by the Coordinator; you never write the log), each containing:
   - `id` — suggested identifier
   - `location` — where in the source the issue arises
   - `issue` — description of the unresolved terminology question
@@ -80,6 +80,7 @@ Return a structured response containing ALL of the following fields:
 ## Boundaries
 
 - **Never write the global Glossary directly.** All entries are proposals returned to the Coordinator for review and approval.
+- **Never write the Unresolved_Issues_Log directly.** Return proposed entries in `unresolved_items`; the Coordinator writes the log.
 - **Never set status to `approved`.** Only the Coordinator may approve entries. Use `proposed` or `needs-review` only.
 - **Never translate chunks.** Your scope is terminology research, not translation.
 - **Never make style decisions.** Style observations belong to the style-researcher role.
