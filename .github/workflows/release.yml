@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -16,6 +17,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v$(cat VERSION)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
       - name: Byte-compile scripts and tests
         run: python -m py_compile scripts/validate_pack.py scripts/build_adapters.py tests/test_pack.py
       - name: Validate source pack (release gate)
@@ -29,34 +40,38 @@ jobs:
           done
       - name: Verify tag matches VERSION
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${{ steps.tag.outputs.tag }}"
           version="$(cat VERSION)"
-          if [ "$tag" != "$version" ]; then
-            echo "Tag v$tag does not match VERSION file ($version)" >&2
+          if [ "${tag#v}" != "$version" ]; then
+            echo "Tag $tag does not match VERSION file ($version)" >&2
             exit 1
           fi
       - name: Package distribution tarball
         run: |
+          tag="${{ steps.tag.outputs.tag }}"
           git archive --format=tar.gz \
-            --prefix="d-transcreate-skill-${GITHUB_REF_NAME}/" \
-            -o "d-transcreate-skill-${GITHUB_REF_NAME}.tar.gz" \
-            "${GITHUB_REF_NAME}"
+            --prefix="d-transcreate-skill-${tag}/" \
+            -o "d-transcreate-skill-${tag}.tar.gz" \
+            HEAD
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ steps.tag.outputs.tag }}"
           notes=".github/releases/${tag}.md"
-          if [ -f "$notes" ]; then
-            gh release create "$tag" \
-              --title "$tag" \
-              --notes-file "$notes" \
-              --verify-tag \
-              "d-transcreate-skill-${tag}.tar.gz"
-          else
-            gh release create "$tag" \
-              --title "$tag" \
-              --generate-notes \
-              --verify-tag \
-              "d-transcreate-skill-${tag}.tar.gz"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists — skipping create."
+            exit 0
           fi
+          args=(--title "$tag")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            args+=(--verify-tag)
+          else
+            args+=(--target "$GITHUB_SHA")
+          fi
+          if [ -f "$notes" ]; then
+            args+=(--notes-file "$notes")
+          else
+            args+=(--generate-notes)
+          fi
+          gh release create "$tag" "${args[@]}" "d-transcreate-skill-${tag}.tar.gz"
