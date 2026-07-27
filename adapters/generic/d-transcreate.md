@@ -10,9 +10,9 @@ Read and follow the canonical entrypoint:
 
 → `core/d-transcreate.md`
 
-That document defines the operating principles and the seven-phase workflow:
-Intake, Whole-Document Scan, Research Terminology and Style, Plan Chunks,
-Translate in Passes, Coordinate Subagents, and Run QA Gates.
+That document defines the operating principles and the eight-phase workflow:
+Intake, Whole-Document Scan, Research Terminology and Style, Plan,
+Translate in Passes, Merge and Final Voice Pass, QA Gates, and Delivery.
 
 ## Subagent Role Prompts
 
@@ -60,7 +60,7 @@ Detailed workflow instructions live under `core/workflows/`:
 
 ## Orchestration Contract
 
-Create a Context_Plan before final chunking. If work is delegated, create a Subagent_Dispatch_Plan before dispatching workers. If the platform has no real parallel subagents, execute the same role contract sequentially.
+Create a Context_Plan before final chunking. If work is delegated, create a Subagent_Dispatch_Plan before dispatching workers, and start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`. If the platform has no real parallel subagents, execute the same role contract sequentially.
 
 ## Notes
 

@@ -22,6 +22,8 @@ Read and follow the canonical role prompt:
 That file defines your complete scope, inputs, output contract, procedure,
 and boundaries.
 
+The path is relative to the project root. If you cannot read that file, stop and return `blocked: missing-role-prompt` to the Coordinator — never proceed on this summary alone.
+
 ## Key Responsibilities
 
 - Mine candidate terms from source text.

@@ -4,7 +4,20 @@ Use this file when the translation task benefits from parallel or sequential sub
 
 ## Subagent Readiness Gate
 
-Do NOT dispatch any Worker_Subagent until ALL of the following artifacts exist on disk:
+The gate has two tiers. The research tier exists because the Glossary and Style_Sheet are *outputs* of research — they cannot also be preconditions for dispatching the researchers who produce them.
+
+### Research-Tier Gate (terminology-researcher, style-researcher — Phase 3)
+
+Researcher roles may be dispatched once ALL of the following hold:
+
+1. **Translation_Brief** exists on disk.
+2. **Source_Map** exists on disk.
+3. The research units are recorded in a **Subagent_Dispatch_Plan** (created now if it does not exist yet; it is extended with translation units in Phase 4).
+4. At most 2 researchers run in parallel until a Context_Plan exists; afterwards the Context_Plan's `max_parallel_workers` applies.
+
+### Full Readiness Gate (chunk-translator, continuity-reviewer, fidelity-reviewer, formatting-reviewer)
+
+Do NOT dispatch any translation or review Worker_Subagent until ALL of the following artifacts exist on disk:
 
 1. **Translation_Brief** — completed intake with source, target, audience, mode, quality bar.
 2. **Source_Map** — whole-document scan with structure, hazards, and material classification.
@@ -68,31 +81,70 @@ The pack defines seven fixed roles. Each role has a disjoint scope. Workers prop
 | **Coordinator** (`transcreate-coordinator`) | Final say on Glossary, Style_Sheet, voice, continuity, merge | All artifacts (read); Glossary, Style_Sheet, Story_Bible/Domain_Map, Chunk_Manifest (write) | Final merged document, accept/reject decisions on proposals |
 | **Terminology Researcher** (`terminology-researcher`) | Proposes only | A term list or chapter range | Glossary proposal rows with evidence and source URL |
 | **Style Researcher** (`style-researcher`) | Proposes only | Target genre/domain conventions | Style observations with paraphrased rationale and source notes |
-| **Chunk Translator** (`chunk-translator`) | Owns one chunk | One chunk's output file, its Chunk_Summary, scoped Unresolved_Issues entries | Translated chunk + uncertain items + Glossary/Style_Sheet change proposals + continuity notes |
+| **Chunk Translator** (`chunk-translator`) | Owns one chunk | One chunk's output file and its Chunk_Summary | Translated chunk + uncertain items + Glossary/Style_Sheet change proposals + continuity notes + unresolved_items |
 | **Continuity Reviewer** (`continuity-reviewer`) | Flags only | One chapter range or chunk set | Defect list: contradictions, timeline/name/pronoun issues with chunk_id and source location |
 | **Fidelity Reviewer** (`fidelity-reviewer`) | Flags only | Source-vs-target comparison | Defect list keyed to source-target paragraph diff (omissions, additions, meaning shifts) |
 | **Formatting Reviewer** (`formatting-reviewer`) | Flags only | Output document layout | Defect list for tables, footnotes, headings, citations, anchors, layout |
 
-**Key constraint:** Workers never write the global Glossary or Style_Sheet directly. They return proposals. The Coordinator reviews, accepts or rejects, and applies accepted changes to the canonical artifacts.
+**Key constraint:** Workers never write ANY shared artifact directly — not the Glossary, Style_Sheet, Story_Bible, Domain_Map, Chunk_Manifest, and not the Unresolved_Issues_Log. Every worker returns proposals and `unresolved_items` in its structured output. The Coordinator reviews, accepts or rejects, applies accepted changes to the canonical artifacts, and is the only writer of the Unresolved_Issues_Log. In sequential mode the main agent performs both sides of this handoff.
+
+## Worker Contract Card
+
+Instructions loaded at the start of a long session drift out of the model's working attention as the run grows. To counter this, the Coordinator MUST paste the following card **verbatim at the top of every worker prompt**, filling the `{placeholders}`. The card re-anchors the binding rules at every dispatch; it supplements — never replaces — the worker's full role prompt.
+
+```text
+WORKER CONTRACT CARD — d-transcreate {skill_version}. Read this first.
+
+1. Stay in role. You are {role} for scope {scope_id}. Do exactly this scope,
+   nothing outside it, even if adjacent text or issues are visible.
+2. Read your full role prompt at core/prompts/{role}.md — the path is
+   relative to the project root. If you cannot read it, STOP and return
+   blocked: missing-role-prompt instead of improvising.
+3. Propose, never write. Write ONLY the output paths listed in your dispatch
+   unit. Never edit the Glossary, Style_Sheet, Story_Bible, Domain_Map,
+   Chunk_Manifest, Unresolved_Issues_Log, or another worker's files. Return
+   proposals and unresolved_items in your structured output; the Coordinator
+   is the only writer of shared artifacts.
+4. Never guess. If a term or passage is ambiguous and your slices do not
+   resolve it, use the best available rendering, mark it uncertain, and list
+   it in uncertain_items / unresolved_items.
+5. Preserve formal data exactly: numbers, dates, citations, URLs, code
+   identifiers, equation labels, table references. Apply format conversions
+   only where the Translation_Brief or Style_Sheet documents the rule.
+6. Follow the approved Glossary and Style_Sheet slices you were given. Never
+   deviate from an approved entry without flagging it.
+7. Fiction: respect reveal timing — never expose a hidden fact earlier than
+   the source does. Consult the Story_Bible excerpt provided.
+8. Copyright: never reproduce extended passages from existing translations;
+   short attributed quotes (one sentence maximum) for evidence only.
+9. Severity scale for findings: critical / major / minor.
+10. Report context pressure honestly: if slices + chunk do not fit, set
+    context_pressure.value: true with a reason and a recommended split.
+    Never silently truncate or skip inputs.
+11. Return ALL fields of your output contract, even when empty.
+```
 
 ## Prompt Pattern for Worker Subagents
 
 When dispatching a Worker_Subagent, the Coordinator provides a structured prompt containing:
 
-1. **Role declaration** — which role this worker fills and the chunk or scope ID.
-2. **Source material** — the source chunk text, or the term list, or the output chunk for review.
-3. **Target context** — target language, locale, audience, and translation mode.
-4. **Artifact slices** (not full artifacts):
+1. **Worker Contract Card** — pasted verbatim from the section above, placeholders filled.
+2. **Role declaration** — which role this worker fills and the chunk or scope ID.
+3. **Source material** — the source chunk text, or the term list, or the output chunk for review.
+4. **Target context** — target language, locale, audience, and translation mode.
+5. **Artifact slices** (not full artifacts):
    - Relevant Translation_Brief excerpt (scope, constraints, quality bar).
    - Relevant Glossary rows (only terms appearing in or adjacent to this chunk).
    - Relevant Style_Sheet rules (only rules applicable to this chunk's content type).
    - Relevant Story_Bible or Domain_Map notes (only entries for characters, concepts, or terms in this chunk).
-5. **Adjacent summaries** — previous Chunk_Summary and next Chunk_Summary when available.
-6. **Exact output contract** — the structured fields the worker MUST return.
+6. **Adjacent summaries** — previous Chunk_Summary and next Chunk_Summary when available.
+7. **Exact output contract** — the structured fields the worker MUST return.
 
 ### Example Prompt Skeleton
 
 ```text
+{worker contract card — pasted verbatim, placeholders filled}
+
 You are the chunk-translator for chunk {chunk_id}.
 Target: {target_language} for {audience}.
 Mode: {translation_mode}.
@@ -187,7 +239,7 @@ Within a single translation run:
 
 Each dispatched worker follows this lifecycle:
 
-1. **Prepare scoped prompt.** Coordinator assembles role declaration, source material, target context, artifact slices, adjacent summaries, and output contract.
+1. **Prepare scoped prompt.** Coordinator assembles the Worker Contract Card, role declaration, source material, target context, artifact slices, adjacent summaries, and output contract.
 2. **Attach only allowed inputs.** Worker receives only the files and slices listed in the dispatch unit's `input_files` and `artifact_slices`.
 3. **Assign output path.** Worker writes only to `allowed_write_paths`.
 4. **Run worker.** Worker executes its role procedure.

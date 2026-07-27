@@ -1,6 +1,6 @@
 # D Transcreate — Canonical Entrypoint
 
-Version: 0.4.0
+Version: 0.5.0
 
 Use this skill to translate or transcreate long documents with controlled terminology,
 consistent voice, and durable state across context windows.
@@ -21,6 +21,9 @@ consistent voice, and durable state across context windows.
 
 ## Core Workflow
 
+The workflow has eight phases. This numbering is canonical: every workflow,
+schema, prompt, and adapter in this pack uses the same phase numbers.
+
 ### Phase 1 — Intake
 
 Identify source files, target language, audience, output format, translation mode, and quality bar.
@@ -35,34 +38,42 @@ For technical/legal/medical: build a **Domain_Map** (concepts, standards, acrony
 
 ### Phase 3 — Research Terminology and Style
 
-Mine candidate terms before translating. Search for official translations, domain glossaries, and reputable parallel texts. Build a **Glossary** and **Style_Sheet**.
+Mine candidate terms before translating. Search for official translations, domain glossaries, and reputable parallel texts. Build a **Glossary** (at minimum the proposed core terms) and an initial **Style_Sheet**.
 If `d-research-skill` is accessible, use it for source discovery and evidence logging.
+Researcher roles may be dispatched in this phase under the research-tier gate defined in `core/workflows/subagents.md`.
 
-### Phase 4 — Plan Chunks
+### Phase 4 — Plan
 
 Create a **Context_Plan** first to record context budget, chunk-size limits, and fallback triggers.
 Then segment by semantic boundaries (chapter, scene, section, subsection, table/figure group) within the Context_Plan's chunk-size limits.
 Keep each chunk small enough for one pass with room for brief, glossary slice, style rules, adjacent summaries, and QA notes.
 Create a **Chunk_Manifest** as the authoritative status ledger.
+When work will be delegated — or delegation is simulated sequentially — create a **Subagent_Dispatch_Plan** before any translation dispatch.
 
 ### Phase 5 — Translate in Passes
+
+Dispatch chunk translators per the Subagent_Dispatch_Plan once the full readiness gate passes (see `core/workflows/subagents.md`), or execute the same plan sequentially. Paste the Worker Contract Card at the top of every worker prompt.
+Each chunk goes through four mandatory passes:
 
 - **Pass A** — Draft faithful translation of one chunk.
 - **Pass B** — Compare against source for omissions, additions, wrong emphasis, numbers, names, formatting, and term consistency.
 - **Pass C** — Revise for target-language fluency while preserving source intent.
-- **Pass D** — Update Glossary, Style_Sheet, Story_Bible/Domain_Map, Chunk_Summary, and Unresolved_Issues_Log.
+- **Pass D** — Update state: Chunk_Summary, Chunk_Manifest status, and proposals for Glossary, Style_Sheet, Story_Bible/Domain_Map, and the Unresolved_Issues_Log (the Coordinator writes the shared artifacts).
 
-### Phase 6 — Coordinate and Merge
+### Phase 6 — Merge and Final Voice Pass
 
-Before dispatching workers, create a **Subagent_Dispatch_Plan**. If the platform does not support parallel subagents, execute the same plan sequentially.
-Use subagents only after the Translation_Brief, Glossary, Style_Sheet, Chunk_Manifest, Context_Plan, and Story_Bible/Domain_Map exist.
-Assign disjoint scopes. Keep one coordinator responsible for final terminology, voice, and continuity.
-Merge chunk outputs in source order and run a final voice pass.
+Merge chunk outputs in source order once all assigned chunks are `done`.
+Run cross-chunk consistency checks (terminology, headings, continuity, formal data), then a single centralized final voice pass. The voice pass is never delegated and never changes meaning.
 
 ### Phase 7 — QA Gates
 
-Run all QA gates before delivery: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting.
+Run all eight QA gates before delivery: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting. Produce the **QA_Report**.
 For high-stakes material, require source-backed terminology decisions and explicit residual-risk notes.
+
+### Phase 8 — Delivery
+
+Deliver the translated output plus a short translator note: scope, assumptions, unresolved issues, terminology worth reviewing, QA checks performed, skill version, and residual risks.
+Deliver only after every QA gate has passed or its residual risks are documented in the QA_Report.
 
 ## Subagent Roles
 
@@ -76,7 +87,7 @@ For high-stakes material, require source-backed terminology decisions and explic
 | 6 | **Fidelity Reviewer** | Flags meaning divergence between source and target (omissions, additions, distortions). |
 | 7 | **Formatting Reviewer** | Flags layout, table, footnote, heading, citation, and numbering defects. |
 
-Workers propose; the Coordinator approves. No worker writes the global Glossary or Style_Sheet directly.
+Workers propose; the Coordinator approves. No worker writes any shared artifact directly — Glossary, Style_Sheet, Story_Bible/Domain_Map, Chunk_Manifest, and the Unresolved_Issues_Log are written only by the Coordinator. Every dispatched worker prompt starts with the Worker Contract Card defined in `core/workflows/subagents.md`, so the binding rules are re-anchored at every dispatch.
 
 ## Reference Index
 

@@ -149,27 +149,22 @@ def rewrite_core_references(content, shared_core_path):
 
 def rewrite_core_paths_for_copy(content, rel_path):
     """
-    Rewrite relative path references to core/ in adapter file content
-    so they resolve correctly in the destination layout where core/ is
-    at the destination root.
+    Normalize every core/ reference in adapter file content to the
+    project-root-relative form `core/...`.
 
-    For a file at relative path 'a/b/c/file.md', the correct prefix to
-    reach the destination root is '../../../', so core/ references become
-    '../../../core/'.
+    Agent runtimes (Claude Code, OpenCode, Cursor, Codex) resolve file
+    paths mentioned in instructions against the project root (the process
+    working directory), NOT against the location of the markdown file that
+    mentions them. A depth-based prefix such as `../../core/...` therefore
+    escapes the project at runtime and the worker silently loses its role
+    prompt. With --core-strategy=copy, core/ is installed at the
+    destination root, so the root-relative form is always correct.
     """
     import re
 
-    # Calculate how many directories deep the file is
-    depth = len(Path(rel_path).parent.parts)
-    if depth == 0:
-        # File is at root level, core/ is directly accessible
-        correct_prefix = "core/"
-    else:
-        correct_prefix = "../" * depth + "core/"
-
-    # Replace patterns like (../)*core/ with the correct relative prefix
+    # Collapse any (../)*core/ reference down to root-relative core/
     pattern = r'(\.\./)*core/'
-    return re.sub(pattern, correct_prefix, content)
+    return re.sub(pattern, "core/", content)
 
 
 # ---------------------------------------------------------------------------

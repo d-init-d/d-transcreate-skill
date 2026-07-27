@@ -19,7 +19,7 @@ No adapter required:
 
 1. Clone or copy this repository (or a release tarball) into your workspace.
 2. Point your agent at the root `SKILL.md`, or at `AGENTS.md` if your host loads instruction files.
-3. The agent reads `core/d-transcreate.md` and runs the seven-phase workflow, persisting artifacts as files.
+3. The agent reads `core/d-transcreate.md` and runs the eight-phase workflow, persisting artifacts as files.
 
 If your runtime supports subagents, the workflow dispatches roles in parallel via the `Subagent_Dispatch_Plan`. If it does not, the same role contract runs sequentially — artifacts are still produced so work can resume and be audited.
 
@@ -45,7 +45,7 @@ The build stages files atomically and validates the destination after install (d
 
 ## Workflow Lifecycle
 
-Intake → Scan → Research → Plan → Translate → Coordinate → QA. The full definition lives in `core/d-transcreate.md` and `core/workflows/`; this README does not duplicate it.
+Intake → Scan → Research → Plan → Translate → Merge → QA → Delivery. The full definition lives in `core/d-transcreate.md` and `core/workflows/`; this README does not duplicate it.
 
 ## Artifacts
 
@@ -86,7 +86,8 @@ python tests/test_pack.py                          # full test suite
 
 1. Bump `VERSION`, the `Version:` line in `core/d-transcreate.md`, and add a `CHANGELOG.md` entry.
 2. Run the commands above; `--release` must pass on the packaged tree.
-3. Package the distribution, excluding the dev-only paths listed in `.distignore` (`_archive/`, `.kiro/`, `.github/`, etc.). `git archive` honors the `export-ignore` rules in `.gitattributes`.
+3. Write the release notes at `.github/releases/v<version>.md`.
+4. Push an annotated tag `v<version>` that matches `VERSION`. The `release` workflow re-validates, re-tests, rebuilds every adapter target, packages the distribution tarball (`git archive` honors the `export-ignore` rules in `.gitattributes`), and publishes the GitHub release with those notes.
 
 ## License
 

@@ -1,7 +1,7 @@
 # Context Plan
 
 ## Identification
-- skill_version: 0.3.0
+- skill_version: 0.5.0
 - platform: Claude Code
 - model_or_agent: claude-sonnet-4 (assumed)
 - known_context_window: 200k tokens (platform stated)
@@ -11,7 +11,8 @@
 - reserved_input_budget: 65% (source + artifact slices)
 - reserved_output_budget: 20% (translation + revision)
 - reserved_qa_budget: 10% (source-compare + uncertainty handling)
-- safety_margin: 10%
+- safety_margin: 5%
+- (sum = 100%)
 
 ## Material
 - source_material_class: fiction

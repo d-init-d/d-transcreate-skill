@@ -10,7 +10,7 @@ and durable state across sessions.
 1. Read `core/d-transcreate.md` for the canonical workflow and operating principles.
 2. Use the Cursor rule `.cursor/rules/d-transcreate.mdc` to activate the skill
    when working on a translation task.
-3. Follow the seven-phase workflow described in the core entrypoint.
+3. Follow the eight-phase workflow described in the core entrypoint.
 
 ## Key Directories
 

@@ -17,10 +17,12 @@ Read and follow the complete role definition:
 
 → `core/prompts/chunk-translator.md`
 
+The path is relative to the project root. If you cannot read that file, stop and return `blocked: missing-role-prompt` to the Coordinator — never proceed on this summary alone.
+
 ## Summary
 
 - Translate your assigned chunk faithfully using the provided context slice.
 - Perform all four passes: draft → source-compare → revise → state-update.
 - Propose Glossary or Style Sheet changes when you encounter new terms or patterns.
 - Update the Chunk Summary after completing your chunk.
-- Flag uncertain items in the Unresolved Issues Log rather than guessing.
+- Return uncertain items in your structured output rather than guessing — the Coordinator logs them.

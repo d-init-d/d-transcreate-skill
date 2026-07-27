@@ -67,11 +67,12 @@ Return a structured response containing ALL of the following fields:
 
 ## Procedure
 
-1. **Verify readiness gate.** Before dispatching any Worker_Subagent, confirm that ALL of the following artifacts exist on disk: Translation_Brief, Source_Map, Glossary (with at minimum proposed core terms), Style_Sheet, Chunk_Manifest, Context_Plan, Subagent_Dispatch_Plan, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
+1. **Verify readiness gate.** The gate has two tiers (see `core/workflows/subagents.md`). Research tier — terminology-researcher and style-researcher may be dispatched once the Translation_Brief and Source_Map exist on disk and their research units are recorded in a Subagent_Dispatch_Plan (max 2 parallel researchers until a Context_Plan exists). Full tier — before dispatching any chunk-translator or reviewer, confirm that ALL of the following artifacts exist on disk: Translation_Brief, Source_Map, Glossary (with at minimum proposed core terms), Style_Sheet, Chunk_Manifest, Context_Plan, Subagent_Dispatch_Plan, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
 
 2. **Plan dispatch.** Review the Chunk_Manifest and Context_Plan. Identify chunks whose status is `ready` or `research-needed`. For `research-needed` chunks, dispatch terminology or style researchers first. For `ready` chunks, dispatch chunk translators with disjoint scopes. Create or update the Subagent_Dispatch_Plan with worker assignments, scopes, and output contracts. Respect the Context_Plan's `max_parallel_workers` limit. Reduce chunk size if context pressure is anticipated.
 
 3. **Prepare worker prompts.** For each Worker_Subagent dispatch, assemble a structured prompt containing:
+   - The **Worker Contract Card** from `core/workflows/subagents.md`, pasted verbatim at the very top with its placeholders filled. This re-anchors the binding rules at every dispatch and is mandatory for every worker, every time.
    - Role declaration and chunk or scope ID.
    - Source material (chunk text, term list, or output chunk for review).
    - Target context (language, locale, audience, mode).
@@ -131,9 +132,11 @@ Return a structured response containing ALL of the following fields:
 
 - **Never delegate final authority.** No Worker_Subagent may override your Glossary, Style_Sheet, voice, or continuity decisions. You are the single point of truth for these artifacts.
 - **Never let workers write global artifacts directly.** Workers propose; you review and write. If a worker returns output that directly modifies the Glossary or Style_Sheet, reject the modification and extract the proposal for your review.
-- **Never skip the readiness gate.** Do not dispatch workers before all required artifacts exist (including Context_Plan and Subagent_Dispatch_Plan). Incomplete artifacts lead to inconsistent parallel output.
-- **Never dispatch without a Context_Plan.** Context budget, chunk-size limits, and fallback triggers must be recorded before chunking or dispatch.
-- **Never dispatch without a Subagent_Dispatch_Plan.** Worker assignments, scopes, and output contracts must be defined before any worker runs.
+- **Never skip the readiness gate.** Researchers require the research-tier gate; chunk translators and reviewers require the full gate (all eight artifacts, including Context_Plan and Subagent_Dispatch_Plan). Incomplete artifacts lead to inconsistent parallel output.
+- **Never dispatch translation or review work without a Context_Plan.** Context budget, chunk-size limits, and fallback triggers must be recorded before chunking or any translation/review dispatch.
+- **Never dispatch without a Subagent_Dispatch_Plan.** Worker assignments, scopes, and output contracts must be defined before any worker runs — researchers included.
+- **Never dispatch without the Worker Contract Card.** Every worker prompt starts with the card from `core/workflows/subagents.md`, placeholders filled. No exceptions, no paraphrasing.
+- **You are the only writer of the Unresolved_Issues_Log.** Workers return `unresolved_items`; you record them in the log with owner and status. In sequential mode you do this immediately after each role's return.
 - **Reduce chunk size if context pressure appears.** If a worker reports `context_pressure: true` or output truncation is detected, split the affected chunk and update the Context_Plan and Chunk_Manifest.
 - **Never delegate the final voice pass.** Even when all chunks pass individually, cross-chunk voice drift can only be caught by a centralized pass over the merged output.
 - **Never skip the final voice pass.** Even when all chunks pass individually, cross-chunk voice drift can only be caught by a centralized pass over the merged output.

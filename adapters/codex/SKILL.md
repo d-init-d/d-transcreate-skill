@@ -5,15 +5,15 @@ description: Faithful translation and transcreation workflow for books, long-for
 
 # D Transcreate Skill
 
-> **Canonical workflow:** [`core/d-transcreate.md`](core/d-transcreate.md)
+> **Canonical workflow:** `core/d-transcreate.md` (all paths are relative to the project root)
 
 Use this skill to translate or transcreate long documents with controlled terminology,
 consistent voice, and durable state across context windows.
 
 ## Quick Start
 
-1. Read `core/d-transcreate.md` for operating principles and the 7-phase workflow.
-2. Follow the phase sequence: Intake → Scan → Research → Plan → Translate → Coordinate → QA.
+1. Read `core/d-transcreate.md` for operating principles and the 8-phase workflow.
+2. Follow the phase sequence: Intake → Scan → Research → Plan → Translate → Merge → QA → Delivery.
 3. Persist all artifacts (brief, glossary, style sheet, manifest, summaries) as workspace files.
 
 ## Operating Principles
@@ -33,24 +33,17 @@ consistent voice, and durable state across context windows.
 | 1. Intake | Identify source, target, audience, mode, quality bar | Translation Brief |
 | 2. Scan | Whole-document inventory before any translation | Source Map |
 | 3. Research | Mine terms, research style, build glossary | Glossary + Style Sheet |
-| 4. Plan | Create Context_Plan, segment by semantic boundaries | Context_Plan + Chunk Manifest |
-| 5. Translate | Multi-pass per chunk: draft → compare → revise → update | Chunk outputs |
-| 6. Coordinate | Create Subagent_Dispatch_Plan, dispatch (if parallel), merge, voice pass | Merged output |
-| 7. QA | Run all QA gates before delivery | QA Report |
+| 4. Plan | Create Context_Plan, segment by semantic boundaries, plan dispatch | Context_Plan + Chunk Manifest + Subagent_Dispatch_Plan |
+| 5. Translate | Dispatch per plan; multi-pass per chunk: draft → compare → revise → update | Chunk outputs |
+| 6. Merge | Merge in source order, cross-chunk checks, central voice pass | Merged output |
+| 7. QA | Run all eight QA gates | QA Report |
+| 8. Delivery | Deliver output + translator note after gates pass | Deliverable |
 
 ## Subagent Roles
 
-When the platform supports parallel execution, the following roles may be dispatched:
+When the platform supports parallel execution, seven roles may be dispatched: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, and Formatting Reviewer. Workers propose; only the Coordinator writes shared artifacts. Start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
 
-1. **Transcreate Coordinator** — final authority on glossary, style, voice, continuity, and merge.
-2. **Terminology Researcher** — mines and proposes terms; never writes global glossary directly.
-3. **Style Researcher** — researches target-language conventions; proposes style rules.
-4. **Chunk Translator** — owns one chunk through the multi-pass cycle.
-5. **Continuity Reviewer** — checks cross-chunk consistency and story/domain continuity.
-6. **Fidelity Reviewer** — checks source faithfulness (omissions, additions, distortions).
-7. **Formatting Reviewer** — checks structural and formatting integrity.
-
-See `core/prompts/` for full role definitions.
+See `core/prompts/` for full role definitions and `core/workflows/subagents.md` for the authoritative role table.
 
 ## Workflow Reference Files
 

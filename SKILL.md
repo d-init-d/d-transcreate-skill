@@ -11,13 +11,13 @@ Use this skill to translate or transcreate substantial documents with fidelity, 
 
 ## Core Workflow
 
-Read `core/d-transcreate.md` first for the canonical seven-phase workflow: Intake → Scan → Research → Plan → Translate → Coordinate → QA.
+Read `core/d-transcreate.md` first for the canonical eight-phase workflow: Intake → Scan → Research → Plan → Translate → Merge → QA → Delivery.
 
 ## Portable Operating Model
 
 - Use this root workflow directly in any agent runtime; no host adapter is required.
 - Use `adapters/` only when the host platform supports a native skill or agent format and you want auto-discovery.
-- If the runtime supports subagents, dispatch roles in parallel or hybrid via the `Subagent_Dispatch_Plan`.
+- If the runtime supports subagents, dispatch roles in parallel or hybrid via the `Subagent_Dispatch_Plan`, and start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
 - If subagents are unavailable, the main agent runs the same role contract sequentially. Artifacts remain mandatory in both modes so work can resume and be audited.
 
 ## Required Artifacts
@@ -38,7 +38,7 @@ Persist every decision as a file on disk, not in chat history:
 
 ## Role Model
 
-Seven roles drive the workflow; workers propose and a single coordinator approves: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, Formatting Reviewer. In a sequential runtime, the main agent performs each role in turn.
+Seven roles drive the workflow; workers propose and a single coordinator approves: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, Formatting Reviewer. Only the Coordinator writes shared artifacts (including the Unresolved_Issues_Log). In a sequential runtime, the main agent performs each role in turn.
 
 ## Reference Index
 

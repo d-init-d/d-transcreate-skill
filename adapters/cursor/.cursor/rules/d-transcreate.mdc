@@ -11,12 +11,12 @@ consistent voice, and durable state across context windows.
 
 ## Canonical Workflow
 
-Read and follow the core entrypoint for operating principles and the full 7-phase workflow:
+Read and follow the core entrypoint for operating principles and the full 8-phase workflow:
 
-→ `core/d-transcreate.md`
+→ `core/d-transcreate.md` (all paths are relative to the project root)
 
-Phases: Intake → Whole-Document Scan → Research Terminology and Style → Plan Chunks →
-Translate in Passes → Coordinate Subagents → Run QA Gates.
+Phases: Intake → Whole-Document Scan → Research Terminology and Style → Plan →
+Translate in Passes → Merge and Final Voice Pass → QA Gates → Delivery.
 
 ## Coordinator Behavior
 
@@ -68,7 +68,7 @@ All artifact templates live under `core/schemas/`:
 
 ## Orchestration Contract
 
-Before chunking, create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget and chunk-size limits. Before dispatching any worker role, create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`).
+Before chunking, create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget and chunk-size limits. Before dispatching any worker role, create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`), and start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
 
 If Cursor does not support real parallel subagents, execute the same role contract sequentially while preserving the artifact handoff rules. See `core/workflows/subagents.md` for the sequential fallback procedure.
 

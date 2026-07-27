@@ -10,10 +10,10 @@ Platform adapters under `adapters/` are optional compatibility layers for host-n
 
 ## Core Workflow
 
-1. Read `core/d-transcreate.md` for operating principles and the seven-phase workflow.
-2. Follow the phase sequence: Intake → Scan → Research → Plan → Translate → Coordinate → QA.
+1. Read `core/d-transcreate.md` for operating principles and the eight-phase workflow.
+2. Follow the phase sequence: Intake → Scan → Research → Plan → Translate → Merge → QA → Delivery.
 3. Persist all decisions as workspace artifacts on disk, not in chat history.
-4. If subagents are available, dispatch scoped roles through `Subagent_Dispatch_Plan`.
+4. If subagents are available, dispatch scoped roles through `Subagent_Dispatch_Plan`, starting every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
 5. If subagents are unavailable, run the same role contract sequentially; the artifacts remain mandatory for resume and auditability.
 
 ## Core Library
@@ -65,14 +65,6 @@ python scripts/build_adapters.py --platform <portable|claude-code|opencode|curso
 
 ## Subagent Roles
 
-The skill defines seven fixed roles. Workers propose; the coordinator approves and writes global artifacts.
-
-1. **Transcreate Coordinator** — final authority on glossary, style, voice, continuity, merge, and QA.
-2. **Terminology Researcher** — mines and proposes evidence-backed terms.
-3. **Style Researcher** — proposes target-language style and register rules.
-4. **Chunk Translator** — translates one assigned chunk through the multi-pass cycle.
-5. **Continuity Reviewer** — flags cross-chunk story or domain continuity defects.
-6. **Fidelity Reviewer** — flags omissions, additions, distortions, and formal-data mismatches.
-7. **Formatting Reviewer** — flags structure, layout, table, link, citation, and code-block defects.
+The skill defines seven fixed roles: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, and Formatting Reviewer. Workers propose; only the Coordinator approves and writes shared artifacts. The authoritative role table (authority, scope, and returns per role) lives in `core/workflows/subagents.md`.
 
 For full details, read `core/d-transcreate.md` and the referenced workflow files on demand.

@@ -17,6 +17,8 @@ Read and follow the complete role definition:
 
 → `core/prompts/transcreate-coordinator.md`
 
+The path is relative to the project root. If you cannot read that file, stop and return `blocked: missing-role-prompt` to the Coordinator — never proceed on this summary alone.
+
 ## Summary
 
 - Orchestrate the seven-phase workflow defined in `core/d-transcreate.md`.

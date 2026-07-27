@@ -13,7 +13,7 @@ The Coordinator owns the Context Plan. Workers read it but never modify it.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `skill_version` | string | yes | Version of the d-transcreate-skill in use (e.g., `0.3.0`). Recorded for auditability. |
+| `skill_version` | string | yes | Version of the d-transcreate-skill in use (e.g., `0.5.0`). Recorded for auditability. |
 | `platform` | string | yes | Agent platform or runtime identifier (e.g., the host name and version, or `generic`/`unknown`). |
 | `model_or_agent` | string | no | Model or agent name if known (e.g., `claude-sonnet-4`, `gpt-5`, `unknown`). |
 | `known_context_window` | string | no | Stated context length when documented (e.g., `200k tokens`, `128k tokens`, `unknown`). |
@@ -55,16 +55,16 @@ The agent SHOULD default to `conservative` when in doubt. Upgrading to `standard
 
 ## Default Budget Policy
 
-Unless overridden by user instruction or platform documentation, allocate the effective budget as:
+Unless overridden by user instruction or platform documentation, allocate the effective budget within these ranges:
 
 ```text
 Input  (source chunk + artifact slices) :  60–70%
 Output (translation draft + revision)   :  20–30%
-QA     (source-compare + uncertainty)   :  10–15%
-Safety margin                           :  10–15%
+QA     (source-compare + uncertainty)   :   5–15%
+Safety margin                           :   5–15%
 ```
 
-Sum must not exceed 100%. Overlap between QA and safety margin is acceptable when the run is short.
+Choose one value from each range so that the four components sum to exactly 100% or less — never more. A recommended default allocation is Input 65% + Output 20% + QA 10% + Safety 5% = 100%.
 
 ## Suggested Chunk Size Presets
 
@@ -130,17 +130,18 @@ When any trigger fires, the Coordinator SHALL:
 # Context Plan
 
 ## Identification
-- skill_version: 0.3.0
+- skill_version: 0.5.0
 - platform: example-runtime (record the host you actually use)
 - model_or_agent: claude-sonnet-4 (assumed)
 - known_context_window: 200k tokens (platform stated)
 
 ## Budget
-- effective_context_budget: ~150k tokens (after system prompt + tool overhead + 10% safety)
+- effective_context_budget: ~150k tokens (after system prompt and tool overhead)
 - reserved_input_budget: 65% (source + artifact slices)
 - reserved_output_budget: 20% (translation + revision)
 - reserved_qa_budget: 10% (source-compare + uncertainty handling)
-- safety_margin: 10%
+- safety_margin: 5%
+- (sum = 100%)
 
 ## Material
 - source_material_class: fiction
@@ -176,11 +177,11 @@ The Context Plan is normally Markdown only; a CSV form is not required. If a CSV
 
 ## Usage Rules
 
-1. **Creation order:** The Context Plan is created in Phase 3 (Research/Planning), AFTER the Translation_Brief and Source_Map exist, and BEFORE the Chunk_Manifest is finalized.
+1. **Creation order:** The Context Plan is created in Phase 4 (Plan), AFTER the Translation_Brief and Source_Map exist, and BEFORE the Chunk_Manifest is finalized.
 2. **Authority:** Only the Coordinator may write or update the Context Plan. Workers read the Plan when assembling worker prompts and may report context-pressure findings, but they do not modify the Plan.
-3. **Before dispatch:** The Subagent_Dispatch_Plan MUST reference an existing Context Plan via `context_plan_ref`. Dispatch without a Context Plan is forbidden.
+3. **Before dispatch:** For translation and review dispatch, the Subagent_Dispatch_Plan MUST reference an existing Context Plan via `context_plan_ref`. Research-tier dispatch (Phase 3) may precede the Context Plan but is capped at 2 parallel researchers until the Plan exists (see `core/workflows/subagents.md`).
 4. **Manifest binding:** When the Context Plan changes (e.g., chunk size reduced after a fallback trigger), the Chunk_Manifest MUST be updated to reflect the new boundaries. Both artifacts must agree.
-5. **Resume:** On session resume, the Coordinator reads the Context Plan first, then the Chunk_Manifest. If the Plan does not exist, treat the run as not yet ready for dispatch.
+5. **Resume:** On session resume, follow the canonical resume order in `core/workflows/context-management.md`: read the Chunk_Manifest first to locate the next incomplete chunk, then re-open the Context Plan before doing any further work. If the Plan does not exist, treat the run as not yet ready for dispatch and recreate it.
 6. **Conservative default:** When the platform's context window is unknown, use `context_mode: conservative` and the smallest chunk preset for the material class. Upgrade only with evidence.
 7. **Never allocate the full window to source:** Even in `large_context` mode, the source + slices budget MUST leave room for output, QA, and safety margin.
 

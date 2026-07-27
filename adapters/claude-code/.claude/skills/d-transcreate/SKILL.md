@@ -5,7 +5,10 @@ description: Faithful translation and transcreation workflow for books, long-for
 
 # D Transcreate Skill
 
-Canonical workflow: [`core/d-transcreate.md`](../../../../core/d-transcreate.md)
+Canonical workflow: `core/d-transcreate.md`
+
+All file paths in this skill are relative to the project root — read them with
+project tools from the working directory, never relative to this file's location.
 
 Use this skill for long-form translation/transcreation work that needs controlled
 terminology, stable voice, chunking, QA, and durable state across Claude Code
@@ -13,15 +16,15 @@ sessions.
 
 ## Claude Code Procedure
 
-1. Read `core/d-transcreate.md`.
+1. Read `core/d-transcreate.md` and follow its eight-phase workflow.
 2. Create the Translation_Brief before translating any chunk.
 3. Build the Source_Map, then the Glossary and Style_Sheet.
 4. Add a Story_Bible for narrative work or a Domain_Map for technical/legal work.
 5. Create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget, chunk-size limits, and fallback triggers.
 6. Create the Chunk_Manifest within the Context_Plan's chunk-size limits.
 7. Create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`) before dispatching any worker.
-8. Use `.claude/agents/` role files only after the readiness gate is satisfied.
-9. Merge centrally, run the final voice pass, then run all QA gates.
+8. Use `.claude/agents/` role files only after the readiness gate is satisfied, and start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
+9. Merge centrally, run the final voice pass, run all eight QA gates, then deliver with translator notes.
 
 ## Orchestration Model
 
@@ -29,7 +32,8 @@ The main Claude thread acts as the **Coordinator**. It owns all global artifacts
 
 - Coordinator creates and maintains the Context_Plan and Subagent_Dispatch_Plan.
 - Subagents receive only their assigned chunk text and relevant artifact slices.
-- Subagents return structured proposals; the Coordinator accepts/rejects and writes canonical artifacts.
+- Every dispatched worker prompt begins with the Worker Contract Card (`core/workflows/subagents.md`) so the rules are re-anchored on every dispatch.
+- Subagents return structured proposals; the Coordinator accepts/rejects and writes canonical artifacts. Workers never write shared files — including the Unresolved_Issues_Log.
 - If context pressure is detected, the Coordinator reduces chunk size and updates the plan.
 
 See `core/workflows/subagents.md` and `core/workflows/context-management.md` for full rules.

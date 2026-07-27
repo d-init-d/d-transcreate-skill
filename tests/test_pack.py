@@ -261,6 +261,116 @@ class PackSmokeTests(unittest.TestCase):
                 header = (seed / "glossary.csv").read_text(encoding="utf-8").splitlines()[0].strip()
                 self.assertEqual(header, GLOSSARY_HEADER)
 
+    def test_built_adapters_use_root_relative_core_paths(self):
+        """Built adapters must never contain ../-escaping core/ references —
+        agent runtimes resolve paths from the project root, so ../core/ breaks
+        at runtime and workers lose their role prompts."""
+        import re
+        escape_pattern = re.compile(r'(?:\.\./)+core/')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for platform in PLATFORMS:
+                with self.subTest(platform=platform):
+                    dest = tmp_path / platform
+                    run_command(PYTHON, BUILD, "--platform", platform, "--dest", dest)
+                    for filepath in dest.rglob("*"):
+                        if not filepath.is_file():
+                            continue
+                        if filepath.suffix not in (".md", ".mdc", ".yaml", ".yml", ".json"):
+                            continue
+                        # Metadata prose (changelog/readme) may mention the
+                        # broken pattern historically; instructions may not.
+                        if filepath.parent == dest and filepath.name in ("CHANGELOG.md", "README.md"):
+                            continue
+                        text = filepath.read_text(encoding="utf-8", errors="replace")
+                        self.assertIsNone(
+                            escape_pattern.search(text),
+                            f"{platform}: {filepath} contains a parent-escaping core/ reference",
+                        )
+
+    def test_built_claude_agents_keep_core_prompt_references(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "claude-code"
+            run_command(PYTHON, BUILD, "--platform", "claude-code", "--dest", dest)
+            agent = dest / ".claude" / "agents" / "chunk-translator.md"
+            text = agent.read_text(encoding="utf-8")
+            self.assertIn("core/prompts/chunk-translator.md", text)
+            self.assertNotIn("../core/", text)
+
+    def test_validator_rejects_parent_escaping_core_refs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            agent = repo_copy / "adapters" / "claude-code" / ".claude" / "agents" / "chunk-translator.md"
+            agent.write_text(
+                agent.read_text(encoding="utf-8").replace(
+                    "core/prompts/chunk-translator.md",
+                    "../../core/prompts/chunk-translator.md",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C18", result.stdout)
+
+    def test_phase_canon_is_consistent(self):
+        """Entrypoint and long-document workflow declare the same 8 phases."""
+        import re
+        entry = (REPO_ROOT / "core" / "d-transcreate.md").read_text(encoding="utf-8")
+        long_doc = (REPO_ROOT / "core" / "workflows" / "long-document.md").read_text(encoding="utf-8")
+        entry_phases = [int(m.group(1)) for m in re.finditer(r'(?m)^###\s+Phase\s+(\d+)\s+—', entry)]
+        long_phases = [int(m.group(1)) for m in re.finditer(r'(?m)^##\s+Phase\s+(\d+):', long_doc)]
+        self.assertEqual(entry_phases, list(range(1, 9)))
+        self.assertEqual(long_phases, list(range(1, 9)))
+
+    def test_validator_rejects_phase_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            long_doc = repo_copy / "core" / "workflows" / "long-document.md"
+            long_doc.write_text(
+                long_doc.read_text(encoding="utf-8").replace(
+                    "## Phase 3: Research Terminology and Style",
+                    "## Phase 3: Segmenting (Chunking)",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C19", result.stdout)
+
+    def test_contract_card_present_and_enforced(self):
+        subagents = (REPO_ROOT / "core" / "workflows" / "subagents.md").read_text(encoding="utf-8")
+        self.assertIn("Worker Contract Card", subagents)
+        self.assertIn("WORKER CONTRACT CARD", subagents)
+        coordinator = (REPO_ROOT / "core" / "prompts" / "transcreate-coordinator.md").read_text(encoding="utf-8")
+        self.assertIn("Contract Card", coordinator)
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            f = repo_copy / "core" / "workflows" / "subagents.md"
+            f.write_text(
+                f.read_text(encoding="utf-8").replace("Worker Contract Card", "Worker Rules"),
+                encoding="utf-8",
+            )
+            result = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C20", result.stdout)
+
+    def test_single_writer_rule_for_unresolved_issues(self):
+        """No distributed doc may instruct workers to write the log directly."""
+        offenders = []
+        for sub in ("core", "adapters"):
+            for p in (REPO_ROOT / sub).rglob("*"):
+                if not p.is_file() or p.suffix not in (".md", ".mdc"):
+                    continue
+                text = p.read_text(encoding="utf-8", errors="replace").lower()
+                if "write findings to the unresolved" in text or "writing findings to the unresolved" in text:
+                    offenders.append(p.relative_to(REPO_ROOT).as_posix())
+        self.assertEqual(offenders, [], f"Docs still tell workers to write the log: {offenders}")
+
     def test_release_hygiene_warns_or_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_copy = Path(tmp) / "repo"

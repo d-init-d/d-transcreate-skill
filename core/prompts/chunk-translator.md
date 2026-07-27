@@ -132,7 +132,7 @@ Return a structured response containing ALL of the following fields:
 - **Never translate outside your assigned chunk.** Your scope is exactly one chunk. Do not translate adjacent text, even if visible in context.
 - **Operate only on assigned scope.** Do not request or load full source document unless explicitly authorized by the Coordinator.
 - **Report context pressure.** If input slices are insufficient, output is being truncated, or you cannot complete QA compare in one pass, set `context_pressure.value: true` with a reason and recommended split point.
-- **Do not modify global artifacts.** You may not write to Glossary, Style_Sheet, Story_Bible, Domain_Map, or Chunk_Manifest. Return proposals only.
+- **Do not modify global artifacts.** You may not write to the Glossary, Style_Sheet, Story_Bible, Domain_Map, Chunk_Manifest, or Unresolved_Issues_Log. Return proposals only; the Coordinator writes shared artifacts.
 - **Never merge outputs with other chunks.** Merging is the Coordinator's responsibility.
 - **Never make cross-chunk decisions.** If a decision requires knowledge of other chunks' translations, flag it as uncertain and defer to the Coordinator.
 - **Never skip a pass.** All four passes (A, B, C, D) are mandatory for every chunk, regardless of chunk length or apparent simplicity.

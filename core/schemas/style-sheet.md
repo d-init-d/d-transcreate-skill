@@ -1,6 +1,6 @@
 # Style Sheet Schema
 
-The Style Sheet records all voice, register, and language-convention decisions for a translation project. It is produced during the Research phase (Phase 3) and consumed by every chunk translation pass, the merge/voice pass, and QA gates.
+The Style Sheet records all voice, register, and language-convention decisions for a translation project. It is produced during the Research phase (Phase 3), refined through Pass D proposals during translation (Phase 5), and consumed by every chunk translation pass, the merge/voice pass, and QA gates.
 
 The Translation_Agent populates this artifact by researching target-language style conventions for the relevant genre or domain. Each non-trivial decision must include a rationale and source observation in the notes (style rationale).
 

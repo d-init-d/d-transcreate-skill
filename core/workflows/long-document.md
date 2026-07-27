@@ -2,7 +2,7 @@
 
 Use this workflow when translating books, manuals, research reports, policies, training material, scripts, subtitles, or any document too large to fit safely in one context window.
 
-This file is the canonical phase-by-phase reference. The entrypoint (`core/d-transcreate.md`) summarizes the seven phases; this file provides the full procedural detail.
+This file is the canonical phase-by-phase reference. The entrypoint (`core/d-transcreate.md`) summarizes the eight phases; this file provides the full procedural detail. The phase numbers used here are the same across every workflow, schema, prompt, and adapter in this pack.
 
 ---
 
@@ -106,7 +106,23 @@ Schema: `core/schemas/source-map.md`.
 
 ---
 
-## Phase 3: Segmenting (Chunking)
+## Phase 3: Research Terminology and Style
+
+Research runs after the Source_Map exists and before chunk boundaries are finalized. The full procedure — candidate term mining, term classification, source priority order, `d-research` integration, copyright rules, and the research stop rule — is defined in `core/workflows/terminology-research.md`.
+
+Phase outputs:
+
+- **Glossary** containing at minimum the proposed core terms, each with evidence and confidence (schema: `core/schemas/glossary.md`).
+- **Initial Style_Sheet** covering register, dialogue conventions, terms of address, and adaptation rules discovered so far (schema: `core/schemas/style-sheet.md`).
+- High-impact unresolved terms recorded in the Unresolved_Issues_Log by the Coordinator.
+
+If the platform supports subagents, the terminology-researcher and style-researcher roles may be dispatched in this phase under the **research-tier gate** (see `core/workflows/subagents.md`): Translation_Brief and Source_Map exist on disk, and the research units are recorded in a Subagent_Dispatch_Plan. Translation and review roles are never dispatched this early.
+
+Do not block on low-impact terms: mark them provisional and continue (research stop rule).
+
+---
+
+## Phase 4: Plan (Context Plan and Chunking)
 
 Create a **Context_Plan** (schema: `core/schemas/context-plan.md`) before finalizing chunk boundaries. The Context_Plan determines the effective chunk-size limits based on platform, model, and material class.
 
@@ -122,29 +138,9 @@ If a semantic unit is too large for the Context_Plan's chunk-size limits, split 
 4. Table / figure / caption group
 5. Footnote / endnote group tied to its anchor
 
-### Recommended Chunk Sizes
+### Chunk Sizes and Resizing
 
-These are initial estimates. Final chunk size is determined by the Context_Plan's `max_source_words_per_chunk` field and adjusted per the rules in `core/workflows/context-management.md`.
-
-| Material type | Source words per chunk (standard profile) |
-|---|---|
-| Routine prose | 900–1,800 |
-| Dense technical / legal text | 600–1,200 |
-| Fiction scene / dialogue | One scene or 800–1,500 |
-| Tables / slides / subtitles | One logical table, slide group, or subtitle block |
-
-For conservative and large_context profiles, see `core/schemas/context-plan.md`.
-
-### Chunk Resizing Triggers
-
-Reduce chunk size below the Context_Plan maximum when:
-
-- Glossary slice for the chunk exceeds 2,000 words.
-- Story_Bible or Domain_Map excerpt exceeds 1,500 words.
-- QA compare cannot fit source + target in one pass.
-- Output is too long for one pass (significant expansion in translation).
-- Worker reports `context_pressure: true`.
-- The chunk contains dense tables, citations, or cross-references requiring extra context.
+Chunk-size presets per context mode and material class are defined once in `core/schemas/context-plan.md` (Suggested Chunk Size Presets). The triggers that force a chunk below the Context_Plan maximum are defined once in `core/workflows/context-management.md` (Chunk Size Adjustment Rules). Do not duplicate those tables here — consult them when planning.
 
 ### Chunk Sizing Constraint
 
@@ -186,9 +182,31 @@ Create a **Chunk_Manifest** artifact recording for each chunk:
 
 Schema: `core/schemas/chunk-manifest.md`.
 
+### Subagent Dispatch Plan
+
+When work will be delegated — or delegation is simulated sequentially — create a **Subagent_Dispatch_Plan** (schema: `core/schemas/subagent-dispatch-plan.md`) at the end of Phase 4, before any translation dispatch. The plan records mode, worker assignments, scopes, dependencies, artifact slices, output contracts, and fallback policy. Even in sequential mode the plan is required to maintain the artifact contract and enable resume.
+
 ---
 
-## Phase 4: Multi-Pass Translation
+## Phase 5: Translate
+
+Translation may run through dispatched Worker_Subagents (parallel or hybrid) or sequentially in the main agent thread. Both paths follow the same multi-pass procedure and the same artifact contract.
+
+### Dispatch (When Subagents Are Available)
+
+Do NOT dispatch any chunk-translator or reviewer before the **full readiness gate** passes — all of the following exist on disk: Translation_Brief, Source_Map, Glossary (with proposed core terms), Style_Sheet, Chunk_Manifest, Story_Bible or Domain_Map (as applicable), Context_Plan, and Subagent_Dispatch_Plan. (Researcher roles use the lighter research-tier gate defined in `core/workflows/subagents.md`.)
+
+Dispatch rules:
+
+- Paste the **Worker Contract Card** (`core/workflows/subagents.md`) at the top of every worker prompt — it re-anchors the binding rules at every dispatch.
+- Assign each Worker_Subagent a disjoint scope from the role set: terminology research, style research, chunk translation, continuity review, fidelity review, or formatting review.
+- Provide each worker only the relevant artifact slices and chunk text, not the full document.
+- Never allow two workers to edit the same output file in parallel.
+- The Coordinator retains final authority over Glossary changes, Style_Sheet decisions, voice consistency, and continuity across chunks. Workers return proposals; only the Coordinator writes shared artifacts.
+
+If the platform does not support parallel subagents, use `mode: sequential` in the Subagent_Dispatch_Plan and execute the same role responsibilities in sequence. See `core/workflows/subagents.md` for full orchestration details.
+
+### Multi-Pass Procedure
 
 Use the same four passes for each chunk. Do not skip passes.
 
@@ -233,48 +251,14 @@ Revise for natural target-language prose:
 
 After completing passes A–C for a chunk:
 
-1. Update the Chunk_Manifest status for this chunk.
-2. Update the Glossary with any new terms or changed decisions.
-3. Update the Style_Sheet with any new decisions.
-4. Update the Story_Bible or Domain_Map with new facts.
-5. Write a compact **Chunk_Summary** for this chunk (used by adjacent chunks for continuity).
-6. Log any QA issues, uncertain items, or follow-ups in the Unresolved_Issues_Log.
+1. Write a compact **Chunk_Summary** for this chunk (used by adjacent chunks for continuity).
+2. Collect Glossary proposals for new terms or changed decisions.
+3. Collect Style_Sheet proposals for new decisions.
+4. Collect continuity notes for the Story_Bible or Domain_Map.
+5. Report QA issues, uncertain items, and follow-ups as `unresolved_items` in the structured return.
+6. The Coordinator then reviews the return, writes accepted changes to the canonical artifacts, records `unresolved_items` in the Unresolved_Issues_Log, and updates the Chunk_Manifest status. In sequential mode the main agent performs both sides of this handoff, in the same order.
 
-If a term in the chunk is ambiguous and no glossary entry resolves it, mark the term as uncertain in the chunk output and add it to the Unresolved_Issues_Log instead of guessing.
-
----
-
-## Phase 5: Subagent Dispatch (When Available)
-
-This phase applies only when the platform supports parallel subagents. If not, execute the same role responsibilities sequentially while following the same artifact contract.
-
-### Readiness Gate
-
-Do NOT dispatch any Worker_Subagent before ALL of the following exist on disk:
-
-- Translation_Brief
-- Source_Map
-- Glossary (with proposed core terms)
-- Style_Sheet
-- Chunk_Manifest
-- Story_Bible or Domain_Map (as applicable)
-- Context_Plan
-- Subagent_Dispatch_Plan
-
-### Dispatch Plan Requirement
-
-Before dispatching workers, create a **Subagent_Dispatch_Plan** (schema: `core/schemas/subagent-dispatch-plan.md`). The plan records mode, worker assignments, scopes, dependencies, artifact slices, output contracts, and fallback policy.
-
-If the platform does not support parallel subagents, use `mode: sequential` but still create the dispatch plan to maintain the artifact contract and enable resume.
-
-### Dispatch Rules
-
-- Assign each Worker_Subagent a disjoint scope from the role set: terminology research, style research, chunk translation, continuity review, fidelity review, or formatting review.
-- Provide each worker only the relevant artifact slices and chunk text, not the full document.
-- Never allow two workers to edit the same output file in parallel.
-- The Coordinator_Subagent retains final authority over Glossary changes, Style_Sheet decisions, voice consistency, and continuity across chunks.
-
-See `core/workflows/subagents.md` for full orchestration details.
+If a term in the chunk is ambiguous and no glossary entry resolves it, mark the term as uncertain in the chunk output and report it as an unresolved item instead of guessing.
 
 ---
 
@@ -306,7 +290,17 @@ Run a single final voice pass over the merged output **centrally** — not as in
 
 ---
 
-## Phase 7: Delivery
+## Phase 7: QA Gates
+
+After the merge and final voice pass, run the eight mandatory QA gates defined in `core/workflows/qa-gates.md`: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting.
+
+- Every gate must pass or produce documented residual risks before delivery.
+- Gates may also run incrementally after each major batch of chunks reaches `done`.
+- The pass produces the **QA_Report** artifact (schema: `core/schemas/qa-report.md`), compiled by the Coordinator.
+
+---
+
+## Phase 8: Delivery
 
 Deliver the translated artifact plus a short translator note covering:
 
@@ -321,7 +315,7 @@ Deliver the translated artifact plus a short translator note covering:
 
 Do not include internal scratch notes unless the user asks for them.
 
-Before delivery, all QA gates defined in `core/workflows/qa-gates.md` must pass.
+Deliver only after every Phase 7 gate has passed or its residual risks are documented in the QA_Report.
 
 ---
 
@@ -331,12 +325,12 @@ Before delivery, all QA gates defined in `core/workflows/qa-gates.md` must pass.
 |---|---|---|
 | Translation_Brief | Phase 1 | `core/schemas/translation-brief.md` |
 | Source_Map | Phase 2 | `core/schemas/source-map.md` |
-| Glossary | Phase 2–4 | `core/schemas/glossary.md` |
-| Style_Sheet | Phase 2–4 | `core/schemas/style-sheet.md` |
-| Story_Bible / Domain_Map | Phase 2–4 | `core/schemas/story-bible.md` / `core/schemas/domain-map.md` |
-| Context_Plan | Phase 3 (before final chunking) | `core/schemas/context-plan.md` |
-| Chunk_Manifest | Phase 3–6 | `core/schemas/chunk-manifest.md` |
-| Subagent_Dispatch_Plan | Phase 5 (before dispatch) | `core/schemas/subagent-dispatch-plan.md` |
-| Chunk_Summary (per chunk) | Phase 4 (Pass D) | `core/schemas/chunk-summary.md` |
-| Unresolved_Issues_Log | Throughout | `core/schemas/unresolved-issues.md` |
+| Glossary | Phase 3–5 | `core/schemas/glossary.md` |
+| Style_Sheet | Phase 3–5 | `core/schemas/style-sheet.md` |
+| Story_Bible / Domain_Map | Phase 2–5 | `core/schemas/story-bible.md` / `core/schemas/domain-map.md` |
+| Context_Plan | Phase 4 (before final chunking) | `core/schemas/context-plan.md` |
+| Chunk_Manifest | Phase 4–6 | `core/schemas/chunk-manifest.md` |
+| Subagent_Dispatch_Plan | Phase 4 (before dispatch; research units may be added in Phase 3) | `core/schemas/subagent-dispatch-plan.md` |
+| Chunk_Summary (per chunk) | Phase 5 (Pass D) | `core/schemas/chunk-summary.md` |
+| Unresolved_Issues_Log | Throughout (written by the Coordinator) | `core/schemas/unresolved-issues.md` |
 | QA_Report | Phase 7 | `core/schemas/qa-report.md` |

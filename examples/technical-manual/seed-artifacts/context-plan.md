@@ -1,7 +1,7 @@
 # Context Plan
 
 ## Identification
-- skill_version: 0.3.0
+- skill_version: 0.5.0
 - platform: Generic
 - model_or_agent: unknown
 - known_context_window: unknown
@@ -11,7 +11,8 @@
 - reserved_input_budget: 60% (source + artifact slices)
 - reserved_output_budget: 25% (translation + revision)
 - reserved_qa_budget: 10% (source-compare + uncertainty handling)
-- safety_margin: 15%
+- safety_margin: 5%
+- (sum = 100%)
 
 ## Material
 - source_material_class: dense_technical

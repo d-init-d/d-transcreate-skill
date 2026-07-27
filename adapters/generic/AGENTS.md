@@ -9,7 +9,7 @@ and durable state across sessions.
 
 1. Read `core/d-transcreate.md` for the canonical workflow and operating principles.
 2. Read `adapters/generic/d-transcreate.md` for the skill entrypoint and role index.
-3. Follow the seven-phase workflow described in the core entrypoint.
+3. Follow the eight-phase workflow described in the core entrypoint.
 
 ## Key Directories
 

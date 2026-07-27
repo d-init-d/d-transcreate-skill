@@ -16,6 +16,8 @@ Read and follow the complete role definition:
 
 → `core/prompts/style-researcher.md`
 
+The path is relative to the project root. If you cannot read that file, stop and return `blocked: missing-role-prompt` to the Coordinator — never proceed on this summary alone.
+
 ## Summary
 
 - Research register, formality, sentence rhythm, dialogue punctuation, and adaptation rules.

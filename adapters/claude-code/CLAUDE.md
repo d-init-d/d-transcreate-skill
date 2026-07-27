@@ -15,17 +15,9 @@ That file references the canonical workflow at `core/d-transcreate.md`.
 
 ## Subagent Roles
 
-This skill defines seven specialized roles that can be dispatched as subagents:
+This skill defines seven specialized roles that can be dispatched as subagents: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, and Formatting Reviewer. Workers propose; only the Coordinator writes shared artifacts. The authoritative role table lives in `core/workflows/subagents.md`.
 
-1. **Transcreate Coordinator** — final authority on glossary, style, voice, continuity, and merge.
-2. **Terminology Researcher** — mines and proposes terms; never writes global glossary directly.
-3. **Style Researcher** — researches target-language conventions; proposes style rules.
-4. **Chunk Translator** — owns one chunk through the multi-pass translation cycle.
-5. **Continuity Reviewer** — checks cross-chunk consistency and story/domain continuity.
-6. **Fidelity Reviewer** — checks source faithfulness (omissions, additions, distortions).
-7. **Formatting Reviewer** — checks structural and formatting integrity.
-
-Subagent definitions are located under `.claude/agents/`.
+Subagent definitions are located under `.claude/agents/`. Start every dispatched worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
 
 ## Key Directories
 
@@ -38,6 +30,6 @@ Subagent definitions are located under `.claude/agents/`.
 ## Quick Start
 
 1. Read `.claude/skills/d-transcreate/SKILL.md` for the skill overview.
-2. Follow the seven-phase workflow: Intake → Scan → Research → Plan → Translate → Coordinate → QA.
+2. Follow the eight-phase workflow: Intake → Scan → Research → Plan → Translate → Merge → QA → Delivery.
 3. Persist all artifacts (brief, glossary, style sheet, manifest, summaries) as workspace files.
 4. When dispatching subagents, use the files under `.claude/agents/`.

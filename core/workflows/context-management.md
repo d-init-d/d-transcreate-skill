@@ -53,22 +53,9 @@ Reduce chunk size below the Context_Plan maximum when:
 
 When reducing, split at the next safest lower-level semantic boundary.
 
-Active context for a chunk SHALL contain only:
-
-- Translation_Brief
-- Relevant Style_Sheet rules
-- Relevant Glossary rows (filtered to terms appearing in the chunk)
-- Story_Bible or Domain_Map excerpt relevant to this chunk
-- Previous Chunk_Summary
-- Next Chunk_Summary (when available)
-- Current source chunk text
-- Unresolved_Issues entries that affect this chunk
-
-Everything else belongs in workspace artifact files on disk.
-
 ## What Loads Per Chunk
 
-Before translating a chunk, load only the minimum context:
+Active context for a chunk SHALL contain only the items below. Everything else belongs in workspace artifact files on disk.
 
 1. **Translation_Brief** — always loaded (compact, sets global constraints).
 2. **Glossary slice** — use search to pull only rows for terms appearing in the current chunk.
@@ -116,17 +103,18 @@ Use stable chunk IDs everywhere. Save decisions, not long discussions.
 
 ## Resume Procedure
 
-When a Translation_Agent resumes after interruption (timeout, context reset, session change):
+When a Translation_Agent resumes after interruption (timeout, context reset, session change), follow this order. It is the canonical resume order used everywhere in this pack.
 
 1. **Read the Chunk_Manifest first.** This is the authoritative status ledger. Determine the first chunk whose status is NOT `done`.
-2. **Re-open the Translation_Brief.** Restore global constraints (languages, audience, mode, quality bar).
-3. **Re-open the Style_Sheet.** Restore voice and formatting decisions.
-4. **Re-open the Glossary.** Restore terminology decisions (or the relevant slice for the current chunk).
-5. **Load the current chunk source.** The first non-done chunk identified in step 1.
-6. **Reconstruct continuity from Chunk_Summaries.** Load the summary of the immediately preceding chunk (and next chunk if available). Do NOT reload full translated outputs of prior chunks.
-7. **Load relevant Story_Bible or Domain_Map excerpt.** Only the entries pertinent to the current chunk.
-8. **Load relevant Unresolved_Issues entries.** Only those scoped to the current chunk or its dependencies.
-9. **Continue translation from the identified chunk.** Do not redo chunks already marked `done`.
+2. **Re-open the Context_Plan.** Restore the context budget, chunk-size limits, and fallback triggers before doing any further work. If no Context_Plan exists, the run is not ready for dispatch — recreate it.
+3. **Re-open the Translation_Brief.** Restore global constraints (languages, audience, mode, quality bar).
+4. **Re-open the Style_Sheet.** Restore voice and formatting decisions.
+5. **Re-open the Glossary.** Restore terminology decisions (or the relevant slice for the current chunk).
+6. **Load the current chunk source.** The first non-done chunk identified in step 1.
+7. **Reconstruct continuity from Chunk_Summaries.** Load the summary of the immediately preceding chunk (and next chunk if available). Do NOT reload full translated outputs of prior chunks.
+8. **Load relevant Story_Bible or Domain_Map excerpt.** Only the entries pertinent to the current chunk.
+9. **Load relevant Unresolved_Issues entries.** Only those scoped to the current chunk or its dependencies.
+10. **Continue translation from the identified chunk.** Do not redo chunks already marked `done`.
 
 ### Manifest as Source of Truth
 

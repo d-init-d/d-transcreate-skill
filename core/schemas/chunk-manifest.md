@@ -97,7 +97,7 @@ Use this format when the Chunk Manifest is embedded in a Markdown document (e.g.
 
 ## Usage Rules
 
-1. **Creation**: The Chunk Manifest is produced during Phase 4 (Planning/Chunking) after the Source_Map, Glossary, and Style_Sheet exist. Every identified semantic unit in the source receives a row.
+1. **Creation**: The Chunk Manifest is produced during Phase 4 (Plan) after the Source_Map, Glossary, and Style_Sheet exist. Every identified semantic unit in the source receives a row.
 2. **Ordering**: Chunks are listed in source document order. The `chunk_id` pattern must be predictable and stable across sessions.
 3. **Dependencies**: A chunk with non-empty `dependencies` cannot transition to `ready` until all listed dependency chunks have status `done`.
 4. **Assignment**: The Coordinator_Subagent assigns chunks to Worker_Subagents. No two workers may be assigned the same chunk simultaneously.

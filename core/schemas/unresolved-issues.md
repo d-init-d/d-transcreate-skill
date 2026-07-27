@@ -4,7 +4,7 @@ This schema defines the **Unresolved_Issues_Log** artifact used throughout the t
 
 ## Purpose
 
-The Unresolved Issues Log serves as a living record of items that require human input, further research, or coordinator decision before the translation can be finalized. It is written to by multiple roles (chunk translators, reviewers, terminology researchers) and consumed during QA gates and delivery.
+The Unresolved Issues Log serves as a living record of items that require human input, further research, or coordinator decision before the translation can be finalized. Any role may **propose** entries — chunk translators, reviewers, and researchers return them as `unresolved_items` in their structured output — but the log file itself has a single writer: the Coordinator (or the main agent acting as Coordinator in sequential mode). The log is consumed during QA gates and delivery.
 
 ## When to Create
 
@@ -53,7 +53,7 @@ File name: `unresolved-issues.md` in the workspace artifact directory.
 
 ## Usage Rules
 
-1. Any role may **add** entries to the log.
+1. Any role may **propose** entries by returning `unresolved_items` in its structured output. Only the **Coordinator_Subagent** writes entries to the log file — this keeps a single writer and prevents parallel-write conflicts. In sequential mode the main agent, acting as Coordinator, records entries immediately after each role's return.
 2. Only the **Coordinator_Subagent** or the **client** may change status to `resolved` or `wont-fix`.
 3. When an issue is resolved, the resolver should update the relevant artifact (Glossary, Style_Sheet, Story_Bible, Domain_Map, or chunk output) to reflect the decision.
 4. The QA gates consume this log to verify that no `open` issues remain for the scope being checked.

@@ -2,7 +2,7 @@
 
 This workflow defines the eight mandatory QA gates that the Translation_Agent runs before final delivery. Every gate must pass or produce documented residual risks before the translated output is released.
 
-Run these gates after the merge and final voice pass (Phase 7), or after each major batch when working incrementally.
+QA is Phase 7 of the canonical workflow. Run these gates after the merge and final voice pass (Phase 6), or after each major batch when working incrementally. Delivery (Phase 8) happens only after every gate has passed or its residual risks are documented.
 
 ## When to Run
 
@@ -201,4 +201,4 @@ When subagents are available, the Coordinator_Subagent may dispatch QA checks to
 | Formatting | Formatting Reviewer |
 | Residual Risk Report | Coordinator (owns final delivery decision) |
 
-Worker_Subagents performing QA write findings to the Unresolved_Issues_Log. The Coordinator_Subagent reviews findings, resolves what can be resolved, and compiles the final QA_Report.
+Worker_Subagents performing QA return findings as `unresolved_items` in their structured output — they never write the Unresolved_Issues_Log themselves. The Coordinator_Subagent records the findings in the log, resolves what can be resolved, and compiles the final QA_Report.

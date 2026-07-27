@@ -1110,6 +1110,172 @@ def check_c16_requirement_refs(root: Path, release: bool) -> List[Finding]:
     return findings
 
 
+def check_c18_no_parent_core_refs(root: Path) -> List[Finding]:
+    """
+    C18: No ../-escaping references to core/ in distributed instruction files.
+
+    Agent runtimes resolve file paths mentioned in instructions against the
+    project root (working directory), not against the referencing file's
+    location. A reference like `../../core/prompts/x.md` therefore escapes
+    the project at runtime and the worker silently loses its role prompt.
+    All references must use the root-relative form `core/...`.
+    """
+    findings: List[Finding] = []
+    pattern = re.compile(r'(?:\.\./)+core/')
+
+    targets: List[Path] = []
+    for rel in ("SKILL.md", "AGENTS.md"):
+        p = root / rel
+        if p.is_file():
+            targets.append(p)
+    for sub in ("core", "adapters"):
+        d = root / sub
+        if d.is_dir():
+            for p in d.rglob("*"):
+                if p.is_file() and p.suffix in (".md", ".mdc", ".yaml", ".yml", ".json"):
+                    targets.append(p)
+
+    for p in targets:
+        if ".git" in p.parts:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(text.split("\n"), 1):
+            if pattern.search(line):
+                findings.append(Finding(
+                    "C18", "error",
+                    f"Parent-escaping core/ reference on line {i} (use root-relative core/...): {line.strip()[:80]}",
+                    p.relative_to(root).as_posix(),
+                ))
+    return findings
+
+
+# Canonical eight-phase numbering. Each entry: (phase number, keyword that must
+# appear in that phase's heading). Both canonical files must agree.
+CANONICAL_PHASES = [
+    (1, "Intake"),
+    (2, "Scan"),
+    (3, "Research"),
+    (4, "Plan"),
+    (5, "Translate"),
+    (6, "Merge"),
+    (7, "QA"),
+    (8, "Deliver"),
+]
+
+
+def _check_phase_headings(text: str, heading_re: "re.Pattern", rel: str) -> List[Finding]:
+    findings: List[Finding] = []
+    found: List[Tuple[int, str]] = []
+    for m in heading_re.finditer(text):
+        found.append((int(m.group(1)), m.group(2).strip()))
+
+    expected_numbers = [n for n, _ in CANONICAL_PHASES]
+    numbers = [n for n, _ in found]
+    if numbers != expected_numbers:
+        findings.append(Finding(
+            "C19", "error",
+            f"Phase headings must be exactly Phases {expected_numbers} in order; found {numbers}",
+            rel,
+        ))
+        return findings
+
+    for (num, keyword), (_, title) in zip(CANONICAL_PHASES, found):
+        if keyword.lower() not in title.lower():
+            findings.append(Finding(
+                "C19", "error",
+                f"Phase {num} heading must mention '{keyword}' (found: '{title}')",
+                rel,
+            ))
+    return findings
+
+
+def check_c19_phase_canon(root: Path) -> List[Finding]:
+    """
+    C19: The eight-phase numbering is identical in the entrypoint and the
+    long-document workflow. These two files define the canon that every other
+    file references, so drift here regenerates the dual-numbering bug.
+    """
+    findings: List[Finding] = []
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings
+
+    entry = core_dir / "d-transcreate.md"
+    if entry.is_file():
+        try:
+            text = entry.read_text(encoding="utf-8")
+            findings.extend(_check_phase_headings(
+                text,
+                re.compile(r'(?m)^###\s+Phase\s+(\d+)\s+—\s+(.+)$'),
+                "core/d-transcreate.md",
+            ))
+        except (UnicodeDecodeError, OSError):
+            pass
+
+    long_doc = core_dir / "workflows" / "long-document.md"
+    if long_doc.is_file():
+        try:
+            text = long_doc.read_text(encoding="utf-8")
+            findings.extend(_check_phase_headings(
+                text,
+                re.compile(r'(?m)^##\s+Phase\s+(\d+):\s+(.+)$'),
+                "core/workflows/long-document.md",
+            ))
+        except (UnicodeDecodeError, OSError):
+            pass
+
+    return findings
+
+
+def check_c20_contract_card(root: Path) -> List[Finding]:
+    """
+    C20: The Worker Contract Card exists in subagents.md and the Coordinator
+    prompt requires it. The card is the per-dispatch re-anchoring mechanism;
+    losing it silently degrades worker compliance on long runs.
+    """
+    findings: List[Finding] = []
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings
+
+    subagents = core_dir / "workflows" / "subagents.md"
+    if subagents.is_file():
+        try:
+            text = subagents.read_text(encoding="utf-8")
+            if "Worker Contract Card" not in text:
+                findings.append(Finding(
+                    "C20", "error",
+                    "subagents.md must define the Worker Contract Card section",
+                    "core/workflows/subagents.md",
+                ))
+            elif "WORKER CONTRACT CARD" not in text:
+                findings.append(Finding(
+                    "C20", "error",
+                    "subagents.md must contain the literal card block (WORKER CONTRACT CARD ...)",
+                    "core/workflows/subagents.md",
+                ))
+        except (UnicodeDecodeError, OSError):
+            pass
+
+    coordinator = core_dir / "prompts" / "transcreate-coordinator.md"
+    if coordinator.is_file():
+        try:
+            text = coordinator.read_text(encoding="utf-8")
+            if "Contract Card" not in text:
+                findings.append(Finding(
+                    "C20", "error",
+                    "Coordinator prompt must require the Worker Contract Card in worker prompts",
+                    "core/prompts/transcreate-coordinator.md",
+                ))
+        except (UnicodeDecodeError, OSError):
+            pass
+
+    return findings
+
+
 def check_c17_templates(root: Path) -> List[Finding]:
     """C17: Template headers match the artifact schemas (only when templates/ exists)."""
     findings: List[Finding] = []
@@ -1181,6 +1347,9 @@ def run_all_checks(root: Path, line_budget: int, duplication_threshold: int, rel
     findings.extend(check_c15_version(root))
     findings.extend(check_c16_requirement_refs(root, release))
     findings.extend(check_c17_templates(root))
+    findings.extend(check_c18_no_parent_core_refs(root))
+    findings.extend(check_c19_phase_canon(root))
+    findings.extend(check_c20_contract_card(root))
 
     return findings
 

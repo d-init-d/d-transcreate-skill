@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "d-transcreate-skill"
-version = "0.4.0"
+version = "0.5.0"
 description = "Portable translation and transcreation skill for AI agents."
 readme = "README.md"
 requires-python = ">=3.8"

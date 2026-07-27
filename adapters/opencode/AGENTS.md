@@ -40,14 +40,6 @@ See `core/workflows/subagents.md` and `core/workflows/context-management.md` for
 
 ## Subagent Roles
 
-The following roles can be dispatched as subagents:
-
-1. **Transcreate Coordinator** — final authority on glossary, style, voice, continuity, and merge.
-2. **Terminology Researcher** — mines and proposes terms; never writes global glossary directly.
-3. **Style Researcher** — researches target-language conventions; proposes style rules.
-4. **Chunk Translator** — owns one chunk through the multi-pass cycle.
-5. **Continuity Reviewer** — checks cross-chunk consistency and story/domain continuity.
-6. **Fidelity Reviewer** — checks source faithfulness (omissions, additions, distortions).
-7. **Formatting Reviewer** — checks structural and formatting integrity.
+Seven roles can be dispatched as subagents: Transcreate Coordinator, Terminology Researcher, Style Researcher, Chunk Translator, Continuity Reviewer, Fidelity Reviewer, and Formatting Reviewer. Workers propose; only the Coordinator writes shared artifacts. The authoritative role table lives in `core/workflows/subagents.md`, and every dispatched worker prompt starts with the Worker Contract Card defined there.
 
 For full details, read `core/d-transcreate.md`.

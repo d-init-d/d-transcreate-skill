@@ -147,6 +147,6 @@ When the source is high-stakes legal, medical, financial, academic, or safety ma
 ## Usage Notes
 
 - The QA_Report is produced by the Coordinator_Subagent after all eight gates complete.
-- Worker_Subagents write findings to the Unresolved_Issues_Log; the Coordinator compiles the final report.
+- Worker_Subagents return findings as `unresolved_items` in their structured output; the Coordinator records them in the Unresolved_Issues_Log and compiles the final report.
 - The report must be persisted to the workspace (not kept only in chat history).
 - On resume after interruption, the agent checks whether a QA_Report already exists and whether it covers all chunks currently at `done` status.

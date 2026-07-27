@@ -25,7 +25,7 @@ Return a structured response containing ALL of the following fields:
   - `chunk_id` — which chunk or merged section the defect appears in
   - `location` — specific location within the chunk (paragraph, line, table row, heading)
   - `category` — one of: `heading`, `list`, `table`, `figure-caption`, `footnote`, `citation`, `code-block`, `whitespace`, `paragraph-break`, `indentation`, `link`, `tag-syntax`, `layout`, `other`
-  - `severity` — one of: `high` (structural breakage visible to reader), `medium` (inconsistency or minor structural issue), `low` (cosmetic or whitespace-only)
+  - `severity` — one of: `critical` (structural breakage visible to the reader, or corrupted data/markup), `major` (inconsistency or structural issue that affects readability), `minor` (cosmetic or whitespace-only). This is the same severity scale used by all reviewer roles and the QA_Report.
   - `description` — clear, concise description of the formatting defect
   - `expected` — what the correct formatting should look like (based on source structure or Translation_Brief spec)
   - `actual` — what was found in the translated output
@@ -131,7 +131,7 @@ Return a structured response containing ALL of the following fields:
 - **Never write to the global Unresolved_Issues_Log directly.** Return proposed entries in your output; the Coordinator writes them.
 - **Never judge translation fidelity or meaning.** If you notice a potential meaning error while checking formatting, note it as an aside but do not report it as a formatting defect. Fidelity belongs to the fidelity-reviewer role.
 - **Never make style decisions.** If a formatting choice depends on a style rule not yet recorded, flag it for the Coordinator rather than deciding.
-- **Never block the workflow** on low-severity cosmetic issues. Report them but do not escalate unless they affect readability.
+- **Never block the workflow** on minor cosmetic issues. Report them but do not escalate unless they affect readability.
 - **Do not invent formatting requirements** not specified in the Translation_Brief or Style_Sheet. Flag ambiguity rather than assuming.
 
 ## Schema References
