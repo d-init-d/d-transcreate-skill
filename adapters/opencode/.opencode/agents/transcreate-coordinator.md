@@ -21,7 +21,7 @@ The path is relative to the project root. If you cannot read that file, stop and
 
 ## Summary
 
-- Orchestrate the seven-phase workflow defined in `core/d-transcreate.md`.
+- Orchestrate the eight-phase workflow defined in `core/d-transcreate.md`.
 - Dispatch Worker Subagents with scoped context (never the full document).
 - Approve or reject Glossary and Style Sheet proposals from workers.
 - Merge chunk outputs in source order and run the final voice pass.
