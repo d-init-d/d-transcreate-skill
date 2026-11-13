@@ -17,14 +17,14 @@ sessions.
 ## Claude Code Procedure
 
 1. Read `core/d-transcreate.md` and follow its eight-phase workflow.
-2. Create the Translation_Brief before translating any chunk.
-3. Build the Source_Map, then the Glossary and Style_Sheet.
+2. For books or multi-chapter runs, initialize and scan with `scripts/book_ops.py` (`init`, `scan`, `sync-glossary --seed`).
+3. Create the Translation_Brief and Source_Map, then run `core/workflows/d-research-module.md` to produce **Research_Dossier** (`core/schemas/research-dossier.md`), seeding Glossary (`memory/glossary-vi.csv` + `glossary.csv`) and Style_Sheet (`core/locales/vi-VN.md` for Vietnamese).
 4. Add a Story_Bible for narrative work or a Domain_Map for technical/legal work.
 5. Create a **Context_Plan** (`core/schemas/context-plan.md`) to record context budget, chunk-size limits, and fallback triggers.
 6. Create the Chunk_Manifest within the Context_Plan's chunk-size limits.
 7. Create a **Subagent_Dispatch_Plan** (`core/schemas/subagent-dispatch-plan.md`) before dispatching any worker.
-8. Use `.claude/agents/` role files only after the readiness gate is satisfied, and start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`.
-9. Merge centrally, run the final voice pass, run all eight QA gates, then deliver with translator notes.
+8. Use `.claude/agents/` role files only after the readiness gate is satisfied, start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`, sync `glossary-inbox.jsonl` across waves, and require Peer Cross-Check before marking chunks `done`.
+9. Verify deterministically (`scripts/book_ops.py verify`), merge (`scripts/book_ops.py merge`), run all eight QA gates, then deliver with translator notes.
 
 ## Orchestration Model
 
@@ -60,6 +60,7 @@ merge, and QA decisions.
 Workflow guides:
 
 - `core/workflows/long-document.md`
+- `core/workflows/d-research-module.md`
 - `core/workflows/terminology-research.md`
 - `core/workflows/fiction-continuity.md`
 - `core/workflows/technical-domain.md`
@@ -71,6 +72,7 @@ Artifact templates:
 
 - `core/schemas/translation-brief.md`
 - `core/schemas/source-map.md`
+- `core/schemas/research-dossier.md`
 - `core/schemas/glossary.md`
 - `core/schemas/style-sheet.md`
 - `core/schemas/story-bible.md`

@@ -25,23 +25,48 @@ If your runtime supports subagents, the workflow dispatches roles in parallel vi
 
 ## Host-Native Adapters (Optional)
 
-Adapters improve auto-discovery on specific hosts but do not change the canonical workflow. Install one with the build script:
+Adapters improve auto-discovery on specific hosts but do not change the canonical workflow. Every build also installs `memory/`, `templates/`, and `scripts/book_ops.py` so the destination workspace is ready to run immediately. Install one with the build script:
 
 ```bash
-python scripts/build_adapters.py --platform <portable|claude-code|opencode|cursor|codex|generic> --dest <path>
+python scripts/build_adapters.py --platform <portable|antigravity|claude-code|opencode|cursor|codex|generic> --dest <path> [--with-d-research <path>]
 ```
 
-The build stages files atomically and validates the destination after install (disable with `--no-validate-after-build`). An existing `opencode.json` (or any existing file) is preserved unless you pass `--force`.
+The build stages files atomically and validates the destination after install (disable with `--no-validate-after-build`). Pass `--with-d-research <path>` to bundle a local `d-research-skill` copy into `<dest>/modules/d-research`. An existing `opencode.json` (or any existing file) is preserved unless you pass `--force`.
 
 ### Compatibility Matrix
 
 | Runtime | Portable root SKILL.md | AGENTS.md | Native adapter | Subagents |
 |---|---:|---:|---:|---:|
+| Antigravity | yes | yes | antigravity | yes, native swarm or `invoke_subagent` |
 | Generic Markdown agent | yes | yes | generic | sequential fallback |
 | Claude Code | yes | yes | claude-code | yes, via `.claude/agents` |
 | OpenCode | yes | yes | opencode | yes, via `.opencode/agents` |
 | Cursor | partial | yes | cursor | sequential or host-dependent |
 | Codex | yes | yes | codex | sequential or host-dependent |
+
+## Zero-Config Book Mode (`scripts/book_ops.py`)
+
+For multi-chapter books and long manuals (`.pdf`, `.epub`, `.md`, `.txt`, `.html`), `scripts/book_ops.py` automates workspace initialization, `.pdf` -> `.txt`/`.epub` conversion, Layout-Preserving EPUB Mode (`.epub` input -> `.epub` output keeps original CSS, fonts, images, cover art, and XHTML DOM wrappers/classes intact), chapter/paragraph-safe scanning, two-tier glossary sync, deterministic verification, and final assembly into clean `.txt`, `.epub`, or `.md`:
+
+```bash
+python scripts/book_ops.py init --source <book_path> --target-lang vi --workspace <dir>
+python scripts/book_ops.py scan --source <book_path> --workspace <dir> --max-words 1500
+python scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang vi
+python scripts/book_ops.py verify --workspace <dir>
+python scripts/book_ops.py merge --workspace <dir> --out <translated_book.epub> --format both
+```
+
+Standalone format conversion (`.pdf` -> `.txt` / `.epub`):
+
+```bash
+python scripts/book_ops.py convert --source book.pdf --out-dir ./converted/
+```
+
+## Modular Research & Persistent Memory
+
+- **Phase 3 Research Engine** (`core/workflows/d-research-module.md`): auto-discovers `d-research` (or falls back to internal search) to produce `Research_Dossier` (`research-dossier.md`). Works with prior translations use **Track A** (harvest canonical terms and audit pitfalls); uncharted works use **Track B** (context, authorial intent, register ladder, and transcreation mindset compass).
+- **Two-Tier Shared Glossary**: persistent cross-book memory in `memory/glossary-vi.csv` seeds project `glossary.csv`, while parallel translators emit new recurring terms to `glossary-inbox.jsonl` for live Coordinator sync (`sync-glossary`) and post-QA promotion (`--promote`).
+- **Locale Profiles**: `core/locales/vi-VN.md` provides Vietnamese pronoun/address matrices, Sino-Vietnamese vs. native register guidance, and anti-translatorese rules.
 
 ## Workflow Lifecycle
 
@@ -52,7 +77,8 @@ Intake → Scan → Research → Plan → Translate → Merge → QA → Deliver
 Every durable decision is a file on disk, never just chat history:
 
 - Translation_Brief, Source_Map
-- Glossary, Style_Sheet
+- Research_Dossier (`research-dossier.md`)
+- Glossary (`glossary.csv` + `glossary-inbox.jsonl`), Style_Sheet
 - Story_Bible (fiction) or Domain_Map (technical/legal)
 - Context_Plan (context budget and chunk-sizing, before final chunking)
 - Chunk_Manifest (authoritative status ledger)
@@ -65,7 +91,7 @@ Artifact contracts are defined under `core/schemas/`.
 ## Examples and Templates
 
 - `examples/` — worked example bundles (technical manual, legal policy, fiction) with original source text and seed artifacts.
-- `templates/` — blank, runtime-neutral artifact templates to copy and fill (`translation-brief.md`, `glossary.csv`, `chunk-manifest.csv`, `context-plan.md`, `subagent-dispatch-plan.yaml`, and more).
+- `templates/` — blank, runtime-neutral artifact templates to copy and fill (`translation-brief.md`, `research-dossier.md`, `glossary.csv`, `chunk-manifest.csv`, `context-plan.md`, `subagent-dispatch-plan.yaml`, and more).
 
 ## For Agents
 
@@ -76,7 +102,7 @@ Start at `SKILL.md` (portable entrypoint) or `AGENTS.md` (generic instructions).
 Validate, test, and build:
 
 ```bash
-python -m py_compile scripts/validate_pack.py scripts/build_adapters.py tests/test_pack.py
+python -m py_compile scripts/validate_pack.py scripts/build_adapters.py scripts/book_ops.py tests/test_pack.py
 python scripts/validate_pack.py . --json          # source validation (warnings allowed)
 python scripts/validate_pack.py . --release        # release gate (hygiene/requirement refs become errors)
 python tests/test_pack.py                          # full test suite

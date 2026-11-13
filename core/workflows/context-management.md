@@ -59,12 +59,13 @@ Active context for a chunk SHALL contain only the items below. Everything else b
 
 1. **Translation_Brief** — always loaded (compact, sets global constraints).
 2. **Glossary slice** — use search to pull only rows for terms appearing in the current chunk.
-3. **Style_Sheet slice** — load only rules relevant to the chunk's content type (dialogue, narration, technical prose, etc.).
-4. **Story_Bible or Domain_Map excerpt** — load only characters, places, concepts, or acronyms referenced in this chunk.
-5. **Previous Chunk_Summary** — provides continuity from the preceding chunk.
-6. **Next Chunk_Summary** — when available, provides forward context for foreshadowing or cross-references.
-7. **Current source chunk** — the raw source text to translate.
-8. **Unresolved_Issues** — filtered to entries scoped to this section, character, term, or domain.
+3. **Style_Sheet slice** — load only rules relevant to the chunk's content type (dialogue, narration, technical prose, etc.), plus target locale constraints (such as `core/locales/vi-VN.md`).
+4. **Research_Dossier slice** — load the Transcreation Mindset compass and relevant Pronoun and Address Matrix rows from `research-dossier.md`.
+5. **Story_Bible or Domain_Map excerpt** — load only characters, places, concepts, or acronyms referenced in this chunk.
+6. **Previous Chunk_Summary** — provides continuity from the preceding chunk.
+7. **Next Chunk_Summary** — when available, provides forward context for foreshadowing or cross-references.
+8. **Current source chunk** — the raw source text to translate (from `source_chunks/<chunk_id>.md` when scanned via `scripts/book_ops.py scan`).
+9. **Unresolved_Issues** — filtered to entries scoped to this section, character, term, or domain.
 
 Do NOT load:
 
@@ -90,11 +91,15 @@ The Chunk_Summary must capture: source range, what happened or main argument, te
 All translation state SHALL be persisted as files in the workspace — never solely in chat history:
 
 - `translation-brief.md`
+- `research-dossier.md`
 - `source-map.md`
 - `glossary.csv` or `glossary.md`
+- `glossary-inbox.jsonl`
+- `evidence-ledger.jsonl` and `research-coverage.json`
 - `style-sheet.md`
 - `story-bible.md` or `domain-map.md`
 - `chunk-manifest.csv` or `chunk-manifest.md`
+- `.book-scan-meta.json` and `source_chunks/`
 - `chunk-summaries.md`
 - `unresolved-issues.md`
 - `qa-report.md`
@@ -108,9 +113,9 @@ When a Translation_Agent resumes after interruption (timeout, context reset, ses
 1. **Read the Chunk_Manifest first.** This is the authoritative status ledger. Determine the first chunk whose status is NOT `done`.
 2. **Re-open the Context_Plan.** Restore the context budget, chunk-size limits, and fallback triggers before doing any further work. If no Context_Plan exists, the run is not ready for dispatch — recreate it.
 3. **Re-open the Translation_Brief.** Restore global constraints (languages, audience, mode, quality bar).
-4. **Re-open the Style_Sheet.** Restore voice and formatting decisions.
-5. **Re-open the Glossary.** Restore terminology decisions (or the relevant slice for the current chunk).
-6. **Load the current chunk source.** The first non-done chunk identified in step 1.
+4. **Re-open the Research_Dossier and Style_Sheet.** Restore the transcreation mindset compass, pronoun/address matrix (`research-dossier.md`), and voice/formatting decisions (`style-sheet.md`).
+5. **Synchronize and re-open the Glossary.** If `glossary-inbox.jsonl` has pending worker proposals, run `python3 scripts/book_ops.py sync-glossary --workspace <dir>`, then load the relevant Glossary slice for the current chunk.
+6. **Load the current chunk source.** The first non-done chunk identified in step 1 (from `source_chunks/<chunk_id>.md` if present).
 7. **Reconstruct continuity from Chunk_Summaries.** Load the summary of the immediately preceding chunk (and next chunk if available). Do NOT reload full translated outputs of prior chunks.
 8. **Load relevant Story_Bible or Domain_Map excerpt.** Only the entries pertinent to the current chunk.
 9. **Load relevant Unresolved_Issues entries.** Only those scoped to the current chunk or its dependencies.
@@ -153,6 +158,7 @@ If overflow recurs after splitting, switch to conservative mode and reduce max_p
 ## References
 
 - Schema: `core/schemas/context-plan.md`
+- Schema: `core/schemas/research-dossier.md`
 - Schema: `core/schemas/chunk-manifest.md`
 - Schema: `core/schemas/chunk-summary.md`
 - Schema: `core/schemas/unresolved-issues.md`

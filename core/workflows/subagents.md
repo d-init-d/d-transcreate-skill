@@ -21,12 +21,13 @@ Do NOT dispatch any translation or review Worker_Subagent until ALL of the follo
 
 1. **Translation_Brief** — completed intake with source, target, audience, mode, quality bar.
 2. **Source_Map** — whole-document scan with structure, hazards, and material classification.
-3. **Glossary** — at minimum proposed core terms with evidence and confidence.
-4. **Style_Sheet** — register, rhythm, adaptation rules, and forbidden patterns recorded.
-5. **Chunk_Manifest** — all chunks planned with stable IDs, dependencies, and initial status.
-6. **Story_Bible** (fiction-class) or **Domain_Map** (technical/legal/medical class) — whichever applies.
-7. **Context_Plan** — context budget, chunk-size limits, and fallback triggers recorded.
-8. **Subagent_Dispatch_Plan** — worker assignments, scopes, and output contracts defined.
+3. **Glossary** — at minimum proposed core terms with evidence and confidence (seeded from `memory/glossary-<target_lang>.csv` when present).
+4. **Research_Dossier** (`research-dossier.md`) — Track A prior-translation harvest or Track B authorial intent, mindset compass, and Pronoun & Address Matrix.
+5. **Style_Sheet** — register, rhythm, adaptation rules, locale profile (`core/locales/vi-VN.md` when target is Vietnamese), and forbidden patterns recorded.
+6. **Chunk_Manifest** — all chunks planned with stable IDs, dependencies, and initial status.
+7. **Story_Bible** (fiction-class) or **Domain_Map** (technical/legal/medical class) — whichever applies.
+8. **Context_Plan** — context budget, chunk-size limits, and fallback triggers recorded.
+9. **Subagent_Dispatch_Plan** — worker assignments, runtime mode, scopes, and output contracts defined.
 
 If any artifact is missing or incomplete, the Coordinator must produce it before dispatching workers. This gate prevents inconsistent parallel output caused by workers operating without shared decisions.
 
@@ -71,6 +72,18 @@ Even in sequential mode (single agent executing all roles), the dispatch plan is
 | Fiction with tight continuity | Hybrid or sequential by scene group | Avoid voice/continuity drift |
 | High-stakes legal/medical/technical | Researchers + reviewers mandatory | Reduce terminology/fidelity risk |
 | Unknown context limit | Conservative/sequential | Avoid overflow |
+
+## Runtime Subagent Capability Auto-Detection Matrix
+
+Before building the `Subagent_Dispatch_Plan`, the Coordinator probes the host runtime's available tools and selects the highest-capability execution mode automatically:
+
+| Mode | Detected Runtime Capabilities | Orchestration & Cross-Check Transport | Glossary Sync Mechanism |
+|---|---|---|---|
+| **Mode 1: Native Swarm / Shared Board** | Shared board and swarm tools (`swarm`, `post_message`, `read_board`, `swarm_wait`) | Coordinator spawns scoped workers on the shared board; workers coordinate peer-to-peer via `@mentions` for cross-check and report final deliverables to `@coordinator`. | Workers post newly discovered recurring terms directly to `@coordinator` / `@terminology-researcher` on the board and/or `<workspace>/glossary-inbox.jsonl`; Coordinator locks terms immediately and runs `scripts/book_ops.py sync-glossary`. |
+| **Mode 2: Subagent Spawner + Messaging** | Subagent invocation or host agent definitions (`invoke_subagent` / `send_message`, Claude `Task` / `.claude/agents`, OpenCode `.opencode/agents`) | Coordinator dispatches non-overlapping parallel waves bounded by `max_parallel_workers`; peer cross-check runs in dedicated reviewer waves. | Translators emit new recurring terms in `glossary_proposals` (and append to `<workspace>/glossary-inbox.jsonl` when authorized); Coordinator runs `scripts/book_ops.py sync-glossary` between waves. |
+| **Mode 3: Sequential Single-Agent Fallback** | Single-thread agent without subagent spawning | Main agent executes the exact same seven role contracts sequentially in source order (`researcher -> translator -> fidelity-reviewer -> continuity-reviewer -> coordinator`). | Main agent updates `<workspace>/glossary.csv` and runs `scripts/book_ops.py sync-glossary` between chunks while keeping the same artifact ledger. |
+
+Record the selected mode (`native_swarm`, `wave_spawner`, or `sequential`) in `Subagent_Dispatch_Plan`. Regardless of mode, all worker boundaries, the Worker Contract Card, and the Mandatory Peer Cross-Check Protocol remain binding.
 
 ## Role Responsibilities
 
@@ -187,11 +200,38 @@ Where a platform does not support parallel subagents, the Translation_Agent exec
 1. Terminology Researcher (if research-needed chunks exist)
 2. Style Researcher (if style decisions are pending)
 3. Chunk Translator (one chunk at a time, in source order)
-4. Continuity Reviewer (after each chapter or logical group)
-5. Fidelity Reviewer (after each chunk or group)
+4. Fidelity Reviewer (cross-check immediately after each chunk or wave)
+5. Continuity Reviewer (cross-check boundary handshake and voice after each chunk or chapter group)
 6. Formatting Reviewer (after merge)
 
 The Coordinator role is performed by the main agent thread in sequential mode.
+
+## Live Shared Glossary Synchronization Protocol
+
+To prevent parallel workers from inventing conflicting translations for newly encountered terms:
+
+1. **Pre-Run Seed (Phase 1 / Phase 3)**: Coordinator seeds `<workspace>/glossary.csv` from `memory/glossary-<target_lang>.csv` using `scripts/book_ops.py init` or `scripts/book_ops.py sync-glossary --seed --target-lang <lang>` alongside terms harvested in `Research_Dossier`.
+2. **Translator Discovery & Proposal (Phase 5)**: Before Pass A, each `chunk-translator` reads its Glossary slice plus the latest synced `<workspace>/glossary.csv` / `<workspace>/glossary-inbox.jsonl`. Whenever a translator encounters a new recurring proper noun, title, or domain term not yet locked:
+   - In **Mode 1 (Swarm)**: post the term proposal immediately to `@coordinator` / `@terminology-researcher` on the board (and record it in `glossary_proposals`), using the best provisional rendering until locked.
+   - In **Mode 2 (Wave Spawner)**: return the entry in `glossary_proposals` and, when authorized by the dispatch unit, append a JSON line (`term`, `preferred_translation`, `term_class`, `context`, `source_location`, `evidence`, `confidence`) to `<workspace>/glossary-inbox.jsonl`.
+   - Workers NEVER mutate `<workspace>/glossary.csv` directly.
+3. **Coordinator Lock & Wave Sync**: Between waves (or immediately upon board mention in Mode 1), the Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir>`, resolves any conflicting proposals, sets accepted rows to `status=approved` in `<workspace>/glossary.csv`, and distributes updated Glossary slices to subsequent waves and reviewers.
+4. **End-of-Book Promotion (Phase 8)**: After all QA gates pass, Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>` to export durable `approved` + `high` confidence terms back into `memory/glossary-<target_lang>.csv`.
+
+## Mandatory Peer Cross-Check Protocol
+
+No chunk may transition from `drafted` (or `drafting`) to `done` on the `chunk-translator`'s authority alone. Every drafted chunk MUST pass independent peer cross-check before the Coordinator updates `Chunk_Manifest` to `done`:
+
+1. **Fidelity Cross-Check (`fidelity-reviewer`)**:
+   - Paragraph-by-paragraph alignment between `<workspace>/source_chunks/<chunk_id>` and `<workspace>/output/<chunk_id>`.
+   - Zero omissions, zero unauthorized additions, zero summarization or truncation markers, and exact formal data verification (numbers, dates, citations, URLs, code identifiers).
+2. **Continuity Cross-Check (`continuity-reviewer`)**:
+   - **Boundary Handshake**: verify continuity at the seam between chunk `N-1` and chunk `N` (no dropped narrative thread, repeated exposition, or POV break).
+   - **Pronoun & Address Compliance**: check every dialogue/narration pair against the `Research_Dossier` Pronoun and Address Matrix and `Story_Bible` (including valid mid-scene shifts).
+   - **Glossary & Locale Compliance**: verify approved terms from `<workspace>/glossary.csv` are used consistently and no `forbidden_translation` or forbidden locale pattern (`core/locales/vi-VN.md`) appears.
+3. **Defect & Revision Loop**:
+   - Reviewers flag only and return structured defects (`pass` / `conditional-pass` / `fail`) plus `unresolved_items` to the Coordinator (reviewers NEVER write `Unresolved_Issues_Log` directly).
+   - If either reviewer returns `critical` or `major` defects (`pass_result: fail`), the Coordinator routes the defect list back to `chunk-translator` (via `@chunk-translator` in Mode 1 or a targeted revision dispatch in Mode 2) for Pass B/C repair, followed by re-verification before the chunk moves to `done`.
 
 ## Coordinator Merge Checklist
 
@@ -275,9 +315,10 @@ Never leave a chunk in an ambiguous state. Either it is `done` with validated ou
 ## References
 
 - Subagent prompt definitions: `core/prompts/transcreate-coordinator.md`, `core/prompts/terminology-researcher.md`, `core/prompts/style-researcher.md`, `core/prompts/chunk-translator.md`, `core/prompts/continuity-reviewer.md`, `core/prompts/fidelity-reviewer.md`, `core/prompts/formatting-reviewer.md`
-- Artifact schemas: `core/schemas/glossary.md`, `core/schemas/style-sheet.md`, `core/schemas/chunk-manifest.md`, `core/schemas/story-bible.md`, `core/schemas/domain-map.md`
-- Context Plan schema: `core/schemas/context-plan.md`
-- Subagent Dispatch Plan schema: `core/schemas/subagent-dispatch-plan.md`
+- Artifact schemas: `core/schemas/glossary.md`, `core/schemas/style-sheet.md`, `core/schemas/research-dossier.md`, `core/schemas/chunk-manifest.md`, `core/schemas/story-bible.md`, `core/schemas/domain-map.md`
+- Context Plan & Dispatch Plan schemas: `core/schemas/context-plan.md`, `core/schemas/subagent-dispatch-plan.md`
+- Research & Locale modules: `core/workflows/d-research-module.md`, `core/locales/vi-VN.md`, `memory/README.md`
 - Context management and resume: `core/workflows/context-management.md`
 - QA gates (post-merge): `core/workflows/qa-gates.md`
 - Long-document workflow (phases): `core/workflows/long-document.md`
+- Deterministic book CLI: `scripts/book_ops.py`

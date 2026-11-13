@@ -83,9 +83,24 @@ Use this format when the Glossary is embedded in a Markdown document (e.g., for 
 6. **Unresolved terms**: If a term is high-impact and no high-confidence evidence is found, set `status` to `needs-review` and report it as an unresolved item; the Coordinator adds the entry to the Unresolved_Issues_Log.
 7. **Low-impact terms**: If research yields no new candidates for a low-impact term, mark it as `proposed` with `confidence: low` and continue translation rather than blocking.
 
+## Two-Tier Memory Architecture
+
+The Glossary operates across two synchronized tiers so approved terminology persists across books while active projects stay lock-consistent across parallel workers:
+
+- **Tier 1 — Global Persistent Memory (`memory/glossary-<lang>.csv`)**: Cross-book baseline repository (for example, `memory/glossary-vi.csv`) using the exact 10-column CSV schema above. Only durable `approved` + `high` confidence entries live in Tier 1.
+- **Tier 2 — Project Live Glossary (`<workspace>/glossary.csv` + `<workspace>/glossary-inbox.jsonl`)**: Project-scoped canonical glossary plus an append-only JSONL proposal inbox used during parallel translation waves.
+
+Synchronization is managed deterministically via `scripts/book_ops.py sync-glossary`:
+
+1. **Seed (`--seed`)**: Imports Tier 1 approved entries into `<workspace>/glossary.csv` at initialization or Phase 3 without overwriting existing project-specific rows.
+2. **Wave Sync**: Merges new proposal rows from `<workspace>/glossary-inbox.jsonl` into `<workspace>/glossary.csv`, deduplicating by `(term, context)` and flagging conflicts for Coordinator resolution before downstream chunks run.
+3. **Promote (`--promote`)**: At Phase 8 after QA passes, exports project entries with `status == "approved"` and `confidence == "high"` back into Tier 1 `memory/glossary-<lang>.csv`.
+
 ## References
 
 - Column requirements, status, and confidence enumerations: defined in the schema tables above.
+- Two-tier persistent memory guide: `memory/README.md`
+- Live synchronization and peer cross-check protocol: `core/workflows/subagents.md`
 - Source priority order: `core/workflows/terminology-research.md`
 - QA terminology gate: `core/workflows/qa-gates.md`
 - Schema existence validation: enforced by `scripts/validate_pack.py`

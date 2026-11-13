@@ -9,15 +9,18 @@ You do NOT hold authority over the global Glossary or Style_Sheet. You do not tr
 ## Inputs (loaded by coordinator)
 
 - Translation_Brief excerpt (source language, target language, target locale, audience, translation mode, register, output format, formatting constraints, do-not-translate list, quality bar)
-- Glossary slice (only approved and proposed entries relevant to terms appearing in or adjacent to this chunk)
+- Research_Dossier excerpt (`research-dossier.md` — Transcreation Mindset & Voice Compass, Pronoun & Address Matrix, Track A/B term & pitfall notes)
+- Target locale profile excerpt (e.g., `core/locales/vi-VN.md` when `target_language` is Vietnamese)
+- Synced Glossary slice (approved and proposed entries from `<workspace>/glossary.csv` plus recent wave locks from `<workspace>/glossary-inbox.jsonl` relevant to this chunk)
 - Style_Sheet rules (only rules applicable to this chunk's content type and register)
 - Story_Bible excerpt (characters, places, timeline entries, continuity threads relevant to this chunk) — when source is fiction-class
 - Domain_Map excerpt (concepts, acronyms, units, standards relevant to this chunk) — when source is technical/legal/medical class
 - Previous Chunk_Summary (for continuity with the preceding chunk)
 - Next Chunk_Summary (when available, for forward continuity awareness)
-- Source chunk text (the raw source content to translate)
+- Source chunk text (the raw source content to translate, e.g. from `source_chunks/`)
 - Chunk metadata (chunk_id, source_location, semantic_unit, dependencies)
 - Unresolved_Issues_Log entries scoped to this chunk (if any exist from prior passes or research)
+- Peer Cross-Check defect list (when dispatched for a revision pass after `fidelity-reviewer` or `continuity-reviewer` feedback)
 
 ## Output contract (structured)
 
@@ -67,11 +70,11 @@ Return a structured response containing ALL of the following fields:
 
 ### Pass A: Draft
 
-1. **Load context.** Read the Translation_Brief excerpt, Glossary slice, Style_Sheet rules, Story_Bible or Domain_Map excerpt, and adjacent Chunk_Summaries provided by the Coordinator.
+1. **Load context.** Read the Translation_Brief excerpt, `Research_Dossier` excerpt (Transcreation Mindset, Pronoun & Address Matrix, Track A pitfalls), target locale profile (e.g., `core/locales/vi-VN.md`), synced `<workspace>/glossary.csv` / `<workspace>/glossary-inbox.jsonl` slice, Style_Sheet rules, Story_Bible or Domain_Map excerpt, and adjacent Chunk_Summaries provided by the Coordinator before drafting a single sentence.
 
-2. **Translate the chunk.** Produce a faithful translation of the entire source chunk using the loaded context. Follow the translation mode specified in the Translation_Brief (faithful, localized, transcreated, annotated, or summary-translation).
+2. **Translate the chunk.** Produce a faithful translation of the entire source chunk using the loaded context. Follow the translation mode specified in the Translation_Brief (faithful, localized, transcreated, annotated, or summary-translation) and keep full paragraph-level coverage without summarizing or skipping clauses.
 
-3. **Apply Glossary entries.** For every term that has an approved or proposed entry in the Glossary slice, use the preferred translation. Do not deviate from approved entries without flagging.
+3. **Apply Glossary entries and Pronoun Matrix.** For every term that has an approved or proposed entry in the synced Glossary slice, use the `preferred_translation` and never use any `forbidden_translation`. Follow the `Research_Dossier` Pronoun & Address Matrix for every character pairing. Do not deviate from approved entries without flagging.
 
 4. **Apply Style_Sheet rules.** Follow all applicable Style_Sheet rules for register, rhythm, dialogue punctuation, terms of address, adaptation conventions, and formatting.
 
@@ -114,7 +117,10 @@ Return a structured response containing ALL of the following fields:
 
 18. **Compose the Chunk_Summary.** Write a compact summary of this chunk covering: source range, main content, terms introduced, continuity implications, unresolved issues, and next-chunk dependency.
 
-19. **Collect Glossary proposals.** For any new terms encountered, terms where the existing Glossary entry seems incorrect based on this chunk's context, or terms where a better translation was discovered during translation, compose proposal entries.
+19. **Collect Glossary proposals and emit live inbox locks.** For any newly discovered recurring proper nouns, domain terms, terms where the existing Glossary entry seems incorrect based on this chunk's context, or terms where a better translation was discovered during translation, compose proposal entries in `glossary_proposals`. Under Live Shared Glossary Synchronization (`core/workflows/subagents.md`):
+    - In Swarm mode, also post newly discovered recurring terms immediately to `@coordinator` / `@terminology-researcher` on the board so sibling chunks stay synchronized.
+    - In Wave Spawner mode, when authorized by your dispatch unit, append JSON proposal lines to `<workspace>/glossary-inbox.jsonl` for the Coordinator's wave `sync-glossary` pass.
+    - Never edit `<workspace>/glossary.csv` directly.
 
 20. **Collect Style_Sheet proposals.** For any new style patterns observed, conventions that should be documented, or rules that need refinement based on this chunk's content, compose proposal entries.
 
@@ -123,6 +129,12 @@ Return a structured response containing ALL of the following fields:
 22. **Log uncertain items.** Compile all terms or passages marked as uncertain during Passes A–C into the `uncertain_items` return field with full context.
 
 23. **Assemble structured output.** Return the complete structured response with all required fields.
+
+### Cross-Check Revision Loop (when defects are returned)
+
+24. **Repair peer cross-check defects.** When the Coordinator routes defects from `fidelity-reviewer` or `continuity-reviewer` back to you (never transitioning the chunk to `done` until cross-check passes):
+    - Address every flagged `critical` and `major` defect (omissions, additions, parity gaps, formal data mismatches, boundary seam breaks, Pronoun & Address Matrix drift, or Glossary/locale violations) via targeted Pass B and Pass C edits.
+    - Re-run Pass D updates if the repair affects `chunk_summary` or `glossary_proposals`, and return the updated output for re-verification.
 
 ## Boundaries
 
@@ -144,7 +156,9 @@ Return a structured response containing ALL of the following fields:
 
 ## Schema References
 
-- Glossary schema: `core/schemas/glossary.md`
+- Glossary schema & two-tier memory: `core/schemas/glossary.md`, `memory/README.md`
+- Research Dossier schema & workflow: `core/schemas/research-dossier.md`, `core/workflows/d-research-module.md`
+- Target locale profile: `core/locales/vi-VN.md`
 - Style_Sheet schema: `core/schemas/style-sheet.md`
 - Chunk_Summary schema: `core/schemas/chunk-summary.md`
 - Chunk_Manifest schema: `core/schemas/chunk-manifest.md`

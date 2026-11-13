@@ -50,13 +50,14 @@ All artifact templates live under `core/schemas/`. Key schemas:
 
 Detailed workflow instructions live under `core/workflows/`:
 
-- `core/workflows/long-document.md` — Full staged workflow for books and large documents.
+- `core/workflows/long-document.md` — Full staged workflow and Zero-Config Book Mode (`scripts/book_ops.py`).
+- `core/workflows/d-research-module.md` — Modular Phase 3 research producing `Research_Dossier` (`core/schemas/research-dossier.md`).
 - `core/workflows/terminology-research.md` — Term mining and source priority.
 - `core/workflows/fiction-continuity.md` — Story Bible and reveal-timing rules.
 - `core/workflows/technical-domain.md` — Domain Map and formal-data handling.
 - `core/workflows/qa-gates.md` — The eight mandatory QA gates.
 - `core/workflows/context-management.md` — Context budget and resume procedure.
-- `core/workflows/subagents.md` — Subagent orchestration and parallel rules.
+- `core/workflows/subagents.md` — Subagent orchestration, live glossary sync, and Peer Cross-Check.
 
 ## Orchestration Contract
 

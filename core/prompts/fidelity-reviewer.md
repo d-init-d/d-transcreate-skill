@@ -17,10 +17,11 @@ You may also be assigned to verify numbers, dates, citations, URLs, code identif
 
 ## Inputs (loaded by coordinator)
 
-- Source chunk text (the original language segment to compare against)
+- Source chunk text (the original language segment from `source_chunks/` to compare against)
 - Target chunk text (the translated output to review)
 - Translation_Brief excerpt (source language, target language, target locale, audience, translation mode, quality bar, do-not-translate list, format conversion rules)
-- Glossary slice (approved terms relevant to this chunk — for verifying correct application)
+- Research_Dossier excerpt (`research-dossier.md` — Track A pitfall audit and Track B semantic/authorial-intent anchors)
+- Synced Glossary slice (approved terms and `forbidden_translation` entries from `<workspace>/glossary.csv` relevant to this chunk — for verifying accurate meaning and term compliance)
 - Style_Sheet excerpt (only rules relevant to modality, register, and adaptation boundaries)
 - Chunk_Manifest entry (chunk ID, status, dependencies, notes)
 - Unresolved_Issues_Log entries already recorded for this chunk (to avoid duplicate flags)
@@ -65,11 +66,13 @@ Return a structured response containing ALL of the following fields:
 
 ## Procedure
 
-1. **Receive assignment.** Accept the source chunk, target chunk, and supporting artifact slices from the Coordinator.
+1. **Receive assignment.** Accept the source chunk, target chunk, and supporting artifact slices from the Coordinator for Peer Cross-Check (`core/workflows/subagents.md`).
 
-2. **Paragraph-level alignment.** Align source paragraphs (or sentences for dense material) with their corresponding target paragraphs. Identify any structural misalignment (merged paragraphs, split paragraphs, reordered content).
+2. **Paragraph-level completeness and parity check.** Align source paragraphs, headings, lists, and tables (or sentences for dense material) 1-to-1 with their corresponding target elements. Flag as `critical` or `major`:
+   - Any skipped paragraph, dropped clause, compressed summary, or incomplete ending / placeholder marker.
+   - Structural misalignment (merged or split paragraphs that drop meaning, missing headings, or mismatched table rows/columns).
 
-3. **Semantic comparison.** For each aligned pair, check for the following fidelity categories:
+3. **Semantic and shared-glossary comparison.** For each aligned pair, check for the following fidelity categories:
    - **Omissions** — content present in source but absent in target.
    - **Additions** — content present in target but absent in source (excluding natural target-language connectors that do not add meaning).
    - **Mistranslated negation** — affirmative rendered as negative or vice versa.
@@ -81,6 +84,7 @@ Return a structured response containing ALL of the following fields:
    - **Wrong speaker or referent** — subject, object, or speaker attribution changed.
    - **Added explanation** — explanatory content inserted that has no basis in the source.
    - **Over-localization** — cultural adaptation that changes the underlying meaning rather than just the surface expression.
+   - **Glossary & pitfall compliance** — verify approved `<workspace>/glossary.csv` terms are rendered faithfully and none of the `forbidden_translation` or `Research_Dossier` Track A mistranslation pitfalls appear.
 
 4. **Formal data verification.** Check that the following match the source exactly:
    - Numbers, percentages, ranges, equations, and units.
@@ -100,10 +104,10 @@ Return a structured response containing ALL of the following fields:
 
 7. **Record findings.** Assemble all defects into the `fidelity_defects` array. For any defect of severity `critical` or `major`, also create a corresponding entry in `unresolved_items` for the Unresolved_Issues_Log.
 
-8. **Determine pass result.**
-   - `pass` — no critical or major defects found.
+8. **Determine Peer Cross-Check pass result.**
+   - `pass` — no critical or major defects found; eligible for Coordinator transition to `done` (pending `continuity-reviewer` check).
    - `conditional-pass` — only minor defects found; chunk may proceed with awareness.
-   - `fail` — one or more critical or major defects found; chunk requires revision before merge.
+   - `fail` — one or more critical or major defects found; chunk MUST return to `chunk-translator` for targeted revision before transition to `done` or merge.
 
 9. **Return structured output.** Assemble all fields into the output contract format above.
 
@@ -123,7 +127,9 @@ Return a structured response containing ALL of the following fields:
 ## Schema References
 
 - Unresolved Issues schema: `core/schemas/unresolved-issues.md`
+- Research Dossier schema & workflow: `core/schemas/research-dossier.md`, `core/workflows/d-research-module.md`
+- Glossary schema: `core/schemas/glossary.md`
 - QA Gates workflow (Gate 2: Fidelity, Gate 6: Numbers): `core/workflows/qa-gates.md`
 - Chunk Manifest schema: `core/schemas/chunk-manifest.md`
 - Translation Brief schema: `core/schemas/translation-brief.md`
-- Subagent orchestration: `core/workflows/subagents.md`
+- Subagent orchestration & Peer Cross-Check: `core/workflows/subagents.md`

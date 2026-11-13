@@ -21,22 +21,30 @@ Platform adapters under `adapters/` are optional compatibility layers for host-n
 The single source of truth lives under `core/`:
 
 - `core/d-transcreate.md` — canonical entrypoint with operating principles and workflow overview.
-- `core/workflows/long-document.md` — phase-by-phase staged workflow.
+- `core/workflows/long-document.md` — phase-by-phase staged workflow (including Zero-Config Book Mode via `scripts/book_ops.py`).
+- `core/workflows/d-research-module.md` — modular Phase 3 research engine producing `Research_Dossier` (Track A prior-translation term harvesting and Track B authorial intent / transcreation mindset formation).
 - `core/workflows/terminology-research.md` — term mining, source priority, evidence rules.
 - `core/workflows/fiction-continuity.md` — Story_Bible, reveal timing, character voice.
 - `core/workflows/technical-domain.md` — Domain_Map, acronyms, units, standards.
 - `core/workflows/context-management.md` — context budget, chunk loading, resume procedure.
-- `core/workflows/subagents.md` — readiness gate, dispatch rules, sequential fallback.
+- `core/workflows/subagents.md` — readiness gate, runtime auto-detection, live `glossary-inbox.jsonl` sync, Peer Cross-Check, sequential fallback.
 - `core/workflows/qa-gates.md` — the eight mandatory QA gates.
-- `core/schemas/` — artifact contracts and templates.
+- `core/locales/vi-VN.md` — Vietnamese localization and book transcreation profile.
+- `core/schemas/` — artifact contracts and templates (including `core/schemas/research-dossier.md`).
 - `core/prompts/` — runtime-neutral role prompts.
+
+## Shared Memory & Book CLI
+
+- `memory/glossary-vi.csv` — persistent Tier-1 cross-book Vietnamese translation memory (`memory/README.md`).
+- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `convert`, `scan`, `sync-glossary`, `verify`, `merge`) for `.pdf` -> `.txt`/`.epub` conversion, Zero-Config Book Mode, `.txt`/`.epub` output generation, and 100% chapter coverage verification.
 
 ## Required Artifacts
 
 Create or maintain these files during a substantial translation run:
 
 - Translation_Brief and Source_Map
-- Glossary and Style_Sheet
+- Research_Dossier (`research-dossier.md`)
+- Glossary (`glossary.csv` + `glossary-inbox.jsonl`) and Style_Sheet
 - Story_Bible for narrative work, or Domain_Map for technical/legal/domain-heavy work
 - Context_Plan before final chunking
 - Chunk_Manifest as the authoritative status ledger
@@ -51,6 +59,7 @@ Use adapters only when the host benefits from native files:
 | Platform | Adapter location | Entrypoint |
 |----------|------------------|------------|
 | Portable | root | `SKILL.md` |
+| Antigravity | `adapters/antigravity/` | `SKILL.md` + `AGENTS.md` |
 | Claude Code | `adapters/claude-code/` | `.claude/skills/d-transcreate/SKILL.md` |
 | OpenCode | `adapters/opencode/` | `AGENTS.md` + `opencode.json` |
 | Cursor | `adapters/cursor/` | `.cursor/rules/d-transcreate.mdc` |
@@ -60,7 +69,7 @@ Use adapters only when the host benefits from native files:
 Install a portable or host-native layout with:
 
 ```bash
-python scripts/build_adapters.py --platform <portable|claude-code|opencode|cursor|codex|generic> --dest <path>
+python scripts/build_adapters.py --platform <portable|antigravity|claude-code|opencode|cursor|codex|generic> --dest <path>
 ```
 
 ## Subagent Roles

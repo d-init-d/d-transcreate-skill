@@ -2,6 +2,7 @@
 
 ## Source
 - Source files: `source/section-01-overview.md`, `source/section-02-installation.md`, `source/section-03-configuration.md`
+- Skill version: 1.0.0
 - Source language: en
 
 ## Target

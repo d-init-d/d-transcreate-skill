@@ -32,10 +32,10 @@ consistent voice, and durable state across context windows.
 |-------|--------|--------------|
 | 1. Intake | Identify source, target, audience, mode, quality bar | Translation Brief |
 | 2. Scan | Whole-document inventory before any translation | Source Map |
-| 3. Research | Mine terms, research style, build glossary | Glossary + Style Sheet |
+| 3. Research | Mine terms, run `core/workflows/d-research-module.md`, build dossier | Research_Dossier + Glossary + Style Sheet |
 | 4. Plan | Create Context_Plan, segment by semantic boundaries, plan dispatch | Context_Plan + Chunk Manifest + Subagent_Dispatch_Plan |
-| 5. Translate | Dispatch per plan; multi-pass per chunk: draft → compare → revise → update | Chunk outputs |
-| 6. Merge | Merge in source order, cross-chunk checks, central voice pass | Merged output |
+| 5. Translate | Dispatch per plan; sync `glossary-inbox.jsonl`; pass + Peer Cross-Check | Chunk outputs |
+| 6. Merge | Verify coverage (`scripts/book_ops.py verify`) and merge in order | Merged output |
 | 7. QA | Run all eight QA gates | QA Report |
 | 8. Delivery | Deliver output + translator note after gates pass | Deliverable |
 
@@ -48,12 +48,14 @@ See `core/prompts/` for full role definitions and `core/workflows/subagents.md` 
 ## Workflow Reference Files
 
 - `core/workflows/long-document.md` — full staged workflow for books and large documents.
+- `core/workflows/d-research-module.md` — modular Phase 3 research engine producing `Research_Dossier` (`core/schemas/research-dossier.md`).
 - `core/workflows/terminology-research.md` — term mining, source priority, d-research integration.
 - `core/workflows/fiction-continuity.md` — story bible, reveal timing, character voice.
 - `core/workflows/technical-domain.md` — domain map, acronyms, units, standards.
 - `core/workflows/qa-gates.md` — the 8 QA gates.
 - `core/workflows/context-management.md` — context budget, chunk loading, resume procedure.
-- `core/workflows/subagents.md` — readiness gate, role dispatch, parallel rules.
+- `core/workflows/subagents.md` — readiness gate, role dispatch, live glossary sync, Peer Cross-Check.
+- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `scan`, `sync-glossary`, `verify`, `merge`).
 
 ## Artifact Schemas
 

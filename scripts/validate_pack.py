@@ -10,6 +10,8 @@ Usage:
 """
 
 import argparse
+import csv
+import io
 import json
 import re
 import sys
@@ -186,6 +188,8 @@ def check_c2_frontmatter(root: Path) -> List[Finding]:
         targets.append(p)
 
     for filepath in targets:
+        if ".git" in filepath.parts or "modules" in filepath.parts:
+            continue
         rel = filepath.relative_to(root).as_posix()
         try:
             text = filepath.read_text(encoding="utf-8")
@@ -234,8 +238,8 @@ def check_c3_internal_links(root: Path) -> List[Finding]:
         # Skip .git directory
         if ".git" in filepath.parts:
             continue
-        # Skip .kiro directory
-        if ".kiro" in filepath.parts:
+        # Skip .kiro and bundled external modules/ directories
+        if ".kiro" in filepath.parts or "modules" in filepath.parts:
             continue
 
         rel = filepath.relative_to(root).as_posix()
@@ -829,7 +833,7 @@ def _find_host_agent_files(root: Path, host_dir: str) -> List[Path]:
     results: List[Path] = []
     for p in root.rglob("*.md"):
         parts = p.parts
-        if ".git" in parts:
+        if ".git" in parts or "modules" in parts:
             continue
         for i in range(len(parts) - 2):
             if parts[i] == host_dir and parts[i + 1] == "agents":
@@ -922,7 +926,7 @@ def check_c2d_opencode_config(root: Path) -> List[Finding]:
     """C2D: opencode.json shape is valid (no top-level name/description; instructions is list)."""
     findings: List[Finding] = []
     for cfg in root.rglob("opencode.json"):
-        if ".git" in cfg.parts:
+        if ".git" in cfg.parts or "modules" in cfg.parts:
             continue
         rel = cfg.relative_to(root).as_posix()
         try:
@@ -954,7 +958,7 @@ def check_c13_hygiene(root: Path, release: bool) -> List[Finding]:
         if (root / name).is_dir():
             findings.append(Finding("C13", level, f"Distribution should not include '{name}/'", name))
     manifest_at_root = root / ".d-transcreate-manifest.json"
-    if release and manifest_at_root.is_file() and (root / "scripts").is_dir():
+    if release and manifest_at_root.is_file() and (root / "scripts" / "validate_pack.py").is_file():
         findings.append(Finding("C13", "error", "Source tree should not contain a build manifest at root", ".d-transcreate-manifest.json"))
     return findings
 
@@ -1318,6 +1322,178 @@ def check_c17_templates(root: Path) -> List[Finding]:
     return findings
 
 
+def check_c21_d_research_module(root: Path) -> List[Finding]:
+    """
+    C21: Modular d-research workflow and Research_Dossier schema/template exist,
+    and d-research-module.md covers prior-translation harvesting and authorial intent / mindset.
+    """
+    findings: List[Finding] = []
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings
+
+    mod_path = core_dir / "workflows" / "d-research-module.md"
+    if not mod_path.is_file():
+        findings.append(Finding(
+            "C21", "error",
+            "Missing modular research workflow: core/workflows/d-research-module.md",
+            "core/workflows/d-research-module.md",
+        ))
+    else:
+        try:
+            low = mod_path.read_text(encoding="utf-8").lower()
+            has_prior = ("prior-translation" in low or "prior translation" in low) and "harvest" in low
+            has_intent_mindset = ("authorial intent" in low or "author's intent" in low) and "mindset" in low
+            if not has_prior:
+                findings.append(Finding(
+                    "C21", "error",
+                    "d-research-module.md must cover prior-translation harvesting",
+                    "core/workflows/d-research-module.md",
+                ))
+            if not has_intent_mindset:
+                findings.append(Finding(
+                    "C21", "error",
+                    "d-research-module.md must cover authorial intent and mindset formation",
+                    "core/workflows/d-research-module.md",
+                ))
+        except (UnicodeDecodeError, OSError) as exc:
+            findings.append(Finding("C21", "error", f"Cannot read d-research-module.md: {exc}", "core/workflows/d-research-module.md"))
+
+    dossier_schema = core_dir / "schemas" / "research-dossier.md"
+    if not dossier_schema.is_file():
+        findings.append(Finding(
+            "C21", "error",
+            "Missing schema: core/schemas/research-dossier.md",
+            "core/schemas/research-dossier.md",
+        ))
+
+    templates_dir = root / "templates"
+    if templates_dir.is_dir():
+        dossier_tpl = templates_dir / "research-dossier.md"
+        if not dossier_tpl.is_file():
+            findings.append(Finding(
+                "C21", "error",
+                "Missing template: templates/research-dossier.md",
+                "templates/research-dossier.md",
+            ))
+
+    return findings
+
+
+def check_c22_shared_glossary_memory(root: Path) -> List[Finding]:
+    """
+    C22: When memory/ exists, memory/glossary-vi.csv must exist, be valid UTF-8,
+    use the exact 10-column glossary header, and contain at least 20 data rows.
+    """
+    findings: List[Finding] = []
+    memory_dir = root / "memory"
+    if not memory_dir.is_dir():
+        return findings
+
+    gl_path = memory_dir / "glossary-vi.csv"
+    if not gl_path.is_file():
+        findings.append(Finding(
+            "C22", "error",
+            "Missing shared glossary memory: memory/glossary-vi.csv",
+            "memory/glossary-vi.csv",
+        ))
+        return findings
+
+    try:
+        raw = gl_path.read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            findings.append(Finding(
+                "C22", "error",
+                "memory/glossary-vi.csv must be UTF-8 without BOM",
+                "memory/glossary-vi.csv",
+            ))
+        text = raw.decode("utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        findings.append(Finding(
+            "C22", "error",
+            f"memory/glossary-vi.csv is not valid UTF-8: {exc}",
+            "memory/glossary-vi.csv",
+        ))
+        return findings
+
+    expected_header = (
+        "term,preferred_translation,forbidden_translation,term_class,"
+        "context,source_location,evidence,confidence,status,notes"
+    )
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines or lines[0].strip() != expected_header:
+        findings.append(Finding(
+            "C22", "error",
+            "memory/glossary-vi.csv header does not match required 10-column schema",
+            "memory/glossary-vi.csv",
+        ))
+        return findings
+
+    rows = list(csv.reader(io.StringIO(text)))
+    data_rows = [r for r in rows[1:] if any(cell.strip() for cell in r)]
+    if len(data_rows) < 20:
+        findings.append(Finding(
+            "C22", "error",
+            f"memory/glossary-vi.csv must have at least 20 data rows (found {len(data_rows)})",
+            "memory/glossary-vi.csv",
+        ))
+
+    return findings
+
+
+def check_c23_book_ops_cli(root: Path) -> List[Finding]:
+    """
+    C23: When scripts/ exists (source root or built destination), scripts/book_ops.py
+    must exist, compile cleanly, and define all 5 subcommands.
+    """
+    findings: List[Finding] = []
+    scripts_dir = root / "scripts"
+    if not scripts_dir.is_dir():
+        return findings
+
+    book_ops = scripts_dir / "book_ops.py"
+    if not book_ops.is_file():
+        findings.append(Finding(
+            "C23", "error",
+            "Missing deterministic book CLI: scripts/book_ops.py",
+            "scripts/book_ops.py",
+        ))
+        return findings
+
+    try:
+        text = book_ops.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        findings.append(Finding(
+            "C23", "error",
+            f"Cannot read scripts/book_ops.py: {exc}",
+            "scripts/book_ops.py",
+        ))
+        return findings
+
+    try:
+        compile(text, str(book_ops), "exec")
+    except SyntaxError as exc:
+        findings.append(Finding(
+            "C23", "error",
+            f"Syntax error in scripts/book_ops.py: {exc}",
+            "scripts/book_ops.py",
+        ))
+
+    required_subcommands = ("init", "convert", "scan", "sync-glossary", "verify", "merge")
+    missing = [
+        cmd for cmd in required_subcommands
+        if f'"{cmd}"' not in text and f"'{cmd}'" not in text
+    ]
+    if missing:
+        findings.append(Finding(
+            "C23", "error",
+            f"scripts/book_ops.py missing subcommand definition(s): {', '.join(missing)}",
+            "scripts/book_ops.py",
+        ))
+
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
@@ -1350,6 +1526,9 @@ def run_all_checks(root: Path, line_budget: int, duplication_threshold: int, rel
     findings.extend(check_c18_no_parent_core_refs(root))
     findings.extend(check_c19_phase_canon(root))
     findings.extend(check_c20_contract_card(root))
+    findings.extend(check_c21_d_research_module(root))
+    findings.extend(check_c22_shared_glossary_memory(root))
+    findings.extend(check_c23_book_ops_cli(root))
 
     return findings
 

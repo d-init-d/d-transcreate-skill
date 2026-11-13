@@ -4,6 +4,23 @@ All notable changes to this skill pack are documented here.
 
 This project follows semantic versioning.
 
+## 1.0.0 — 2026-11-13
+
+Production release: book-scale automation, layout-preserving EPUB rebuild, modular pre-translation research, and persistent cross-book translation memory.
+
+### Added
+
+- **Modular `d-research` integration** (`core/workflows/d-research-module.md`, `core/schemas/research-dossier.md`, `templates/research-dossier.md`): 3-tier module discovery with internal fallback producing `Research_Dossier` (`research-dossier.md`) via Track A (prior-translation term harvesting & pitfall audit) and Track B (context, authorial intent, register ladder, and transcreation mindset compass formation).
+- **Two-tier persistent shared glossary** (`memory/glossary-vi.csv`, `memory/README.md`) and Vietnamese book localization profile (`core/locales/vi-VN.md`).
+- **Live Sub-Agent glossary sync & Peer Cross-Check** (`core/workflows/subagents.md`): runtime capability auto-detection (Native Swarm, Subagent Spawner, Sequential fallback), `glossary-inbox.jsonl` wave synchronization, and mandatory independent cross-review before marking chunks `done`.
+- **Deterministic book pipeline CLI** (`scripts/book_ops.py`): `init`, `convert`, `scan`, `sync-glossary`, `verify`, and `merge` subcommands supporting `.pdf` -> clean `.txt`/`.epub` conversion, Layout-Preserving EPUB Mode (`.epub` input -> `.epub` output keeps all original CSS, fonts, images, cover art, and XHTML DOM layout/classes intact), 100% chapter coverage, anti-summarization/anti-truncation parity, glossary compliance, and `.txt`/`.epub`/`.md` merged book output.
+- **Antigravity adapter** (`adapters/antigravity/SKILL.md`, `adapters/antigravity/AGENTS.md`), `--with-d-research` build option in `scripts/build_adapters.py`, and validator checks **C21–C23** in `scripts/validate_pack.py`.
+
+### Changed
+
+- `scripts/build_adapters.py` now installs `memory/`, `templates/`, and `scripts/book_ops.py` into all adapter and portable destinations so every installed workspace has the shared glossary and book CLI ready to run.
+- Example seed artifacts updated to `skill_version: 1.0.0`.
+
 ## 0.5.0 — 2026-07-27
 
 Agent-compliance release: one canon, one writer, one path form. Fixes the

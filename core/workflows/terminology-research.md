@@ -1,8 +1,27 @@
 # Terminology Research Workflow
 
-This workflow governs how a Translation_Agent mines candidate terms from the source, discovers evidence-backed translations, integrates with `d-research-skill` when available, and populates the Glossary before chunk translation begins.
+This workflow governs how a Translation_Agent runs Phase 3 reconnaissance via `core/workflows/d-research-module.md`, seeds from Global Translation Memory, mines candidate terms from the source, discovers evidence-backed translations, and populates `research-dossier.md` and `glossary.csv` before chunk translation begins.
 
-Load this file after the Source_Map is complete and before assigning any chunk for translation.
+Load this file alongside `core/workflows/d-research-module.md` and `core/schemas/research-dossier.md` at the start of Phase 3 (after `Translation_Brief` and `Source_Map` are complete and before assigning any chunk for translation).
+
+## Phase 3 Entry: Research_Dossier and Two-Tier Glossary Seeding
+
+At the start of Phase 3, execute these initialization steps before launching term-by-term web searches:
+
+1. **Activate `d-research` reconnaissance (`core/workflows/d-research-module.md`):**
+   - Resolve `d-research` via the 3-tier discovery chain (host skill, bundled/linked module, or internal search fallback) and sync telemetry to `evidence-ledger.jsonl` and `research-coverage.json`.
+   - Run dual-track reconnaissance (Documentary + Community/Social) to classify `prior_translation_status` (`official_published`, `community_established`, `partial`, or `none`) in `research-dossier.md` (`core/schemas/research-dossier.md`).
+2. **Two-Tier Glossary Seeding:**
+   - Before searching the web for common literary, structural, or domain terms, seed the project's `glossary.csv` from Global Translation Memory (`memory/glossary-<target_lang>.csv`, e.g., `memory/glossary-vi.csv`) using:
+     ```bash
+     python3 scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang <lang>
+     ```
+   - Skip redundant web searches for candidates already covered at `high` confidence by the seeded `glossary.csv`, unless source context indicates a work-specific sense conflict.
+3. **Select Research Track:**
+   - **Track A (`official_published`, `community_established`, or `partial`):** Perform prior-translation harvesting for canonical character names, toponyms, organizations, ranks, titles, worldbuilding/special terms, and established pronoun pairings. Audit prior editions to extract known mistranslations, awkward calques, and disputed renderings into `forbidden_translation` (and `Existing Translations Audit` in `research-dossier.md`).
+   - **Track B (`none` — Uncharted Work, plus voice grounding for Track A):** Investigate historical, cultural, and domain context; analyze authorial intent and `source_voice_signature`; map the 4-rung Register Ladder (`Canonical/Formal` <-> `Mainstream/Lay` <-> `Community/Domain Jargon` <-> `Vernacular/Slang`); and formulate the Transcreation Mindset, Voice Compass, and Neologism Policy in `research-dossier.md`.
+
+Worker boundary: Dispatched researchers (`terminology-researcher` and `style-researcher`) return proposals (`glossary_proposals`, `dossier_proposals`, `style_proposals`, and `unresolved_items`) only; the Coordinator approves and writes `research-dossier.md`, `glossary.csv`, `style-sheet.md`, and `unresolved-issues.md`.
 
 ## Research Goals
 
@@ -59,16 +78,23 @@ When sources disagree:
 
 ## d-research Integration
 
-### When d-research-skill Is Available
+Use `core/workflows/d-research-module.md` to activate `d-research` (`d-research-skill`) across its 3-tier resolution order (Tier 1 host-installed skill, Tier 2 bundled/linked `modules/d-research/SKILL.md` or `../d-research-skill/SKILL.md`, Tier 3 internal search fallback).
 
-If `d-research-skill` is accessible (installed as a sibling skill, present as a sibling repo or submodule, or explicitly enabled in configuration) AND the user has not disabled it in the Translation_Brief, delegate the following to `d-research`:
+### When d-research-skill Is Available (Tier 1 or Tier 2)
 
+If `d-research-skill` is accessible AND the user has not disabled it in the Translation_Brief, delegate the following to `d-research` and sync telemetry to `evidence-ledger.jsonl` and `research-coverage.json`:
+
+- Work and prior-translation reconnaissance (`Work_Classification`, Track A edition audit, Track B cultural/domain context)
 - Terminology source discovery (finding official and common target-language translations)
-- Multilingual research (searching in both source and target languages)
+- Multilingual and register research (using `references/multilingual-research.md`, `references/vietnamese-source-discovery.md`, and `references/register-and-jargon-expansion.md` when present)
 - Evidence logging (structured evidence ledger with source URL, term, candidate, confidence, notes)
 - Source-quality checks (ranking sources per the priority order above)
 
 Recommended delegation prompts:
+
+```text
+Use $d-research to classify prior target-language translations for [WORK_TITLE] by [AUTHOR], audit existing editions for canonical terms and mistranslations, and log evidence into evidence-ledger.jsonl and research-coverage.json.
+```
 
 ```text
 Use $d-research to find official and common target-language translations for these source terms. Prefer primary sources, official localization, standards, laws, publisher pages, reputable glossaries, and high-quality bilingual references. Return a concise evidence ledger with source URL, term, candidate translation, confidence, and notes.
@@ -78,14 +104,14 @@ Use $d-research to find official and common target-language translations for the
 Use $d-research to search in both source and target languages for canonical translations of [TERM_LIST]. Prefer original-language sources when verifying domain terms.
 ```
 
-### When d-research-skill Is Not Available (Fallback Protocol)
+### When d-research-skill Is Not Available (Tier 3 Internal Search Fallback)
 
-If `d-research-skill` is not accessible or has been disabled, the Translation_Agent SHALL fall back to this protocol without blocking the translation workflow:
+If `d-research-skill` is not accessible or has been disabled, the Translation_Agent SHALL fall back to Tier 3 without blocking the translation workflow while producing the same `research-dossier.md`, `evidence-ledger.jsonl`, and `research-coverage.json` artifacts:
 
 1. Use any available search or browsing tools provided by the agent platform.
 2. If no search tools are available, rely on the agent's training knowledge and clearly mark confidence as `medium` or `low` for terms that cannot be verified against a live source.
 3. Apply the Source Priority Order above to any evidence found.
-4. Record the research method used (e.g., "agent knowledge only — no live search available") in the Glossary `evidence` column.
+4. Record the research method used (e.g., `internal_search_fallback` or `offline_knowledge_fallback`) in `research-dossier.md` and the Glossary `evidence` column.
 5. Mark unverified high-impact terms as `needs-review` in the Glossary and route them to the Unresolved_Issues_Log (dispatched researchers return them as `unresolved_items` proposals; the Coordinator writes the entries).
 
 The translation workflow MUST NOT block on the absence of `d-research-skill`. The pack does not declare `d-research-skill` as a hard dependency.
@@ -140,6 +166,8 @@ Do not block translation indefinitely on low-impact terms. Mark them as provisio
 
 ## Schema Reference
 
+- D-Research Module workflow: `core/workflows/d-research-module.md`
+- Research Dossier schema: `core/schemas/research-dossier.md`
 - Glossary schema: `core/schemas/glossary.md`
 - Unresolved Issues schema: `core/schemas/unresolved-issues.md`
 - Translation Brief schema: `core/schemas/translation-brief.md`

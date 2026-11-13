@@ -1,6 +1,6 @@
 # D Transcreate — Canonical Entrypoint
 
-Version: 0.5.0
+Version: 1.0.0
 
 Use this skill to translate or transcreate long documents with controlled terminology,
 consistent voice, and durable state across context windows.
@@ -28,18 +28,21 @@ schema, prompt, and adapter in this pack uses the same phase numbers.
 
 Identify source files, target language, audience, output format, translation mode, and quality bar.
 Default to faithful translation with light transcreation for idioms and dialogue when mode is unspecified.
+In **Zero-Config Book Mode**, run `scripts/book_ops.py init` to scaffold the workspace, populate defaults in the **Translation_Brief**, seed the project glossary from `memory/glossary-<lang>.csv`, and link target locale profiles (such as `core/locales/vi-VN.md`).
 Produce a **Translation_Brief** before any chunk translation begins.
 
 ### Phase 2 — Whole-Document Scan
 
-Inspect the full document once. Create a **Source_Map**: sections, chapters, tables, figures, notes, references, captions, appendices, repeated blocks, and formatting hazards.
+Inspect the full document once. For books and multi-file sources (including `.pdf`, `.epub`, `.md`, `.txt`, and `.html`), run `scripts/book_ops.py scan` to detect chapters/sections, automatically convert `.pdf` inputs into clean `.txt` and `.epub` files under `<workspace>/converted_source/`, split oversized units at paragraph boundaries, materialize `source_chunks/`, and generate `source-map.md`, `chunk-manifest.csv`, and `.book-scan-meta.json`. You can also run `scripts/book_ops.py convert` directly to normalize a `.pdf` into `.epub` and/or `.txt`.
+Create a **Source_Map**: sections, chapters, tables, figures, notes, references, captions, appendices, repeated blocks, and formatting hazards.
 For fiction: build a **Story_Bible** (characters, timeline, POV, motifs, terms of address).
 For technical/legal/medical: build a **Domain_Map** (concepts, standards, acronyms, units, formal data).
 
 ### Phase 3 — Research Terminology and Style
 
-Mine candidate terms before translating. Search for official translations, domain glossaries, and reputable parallel texts. Build a **Glossary** (at minimum the proposed core terms) and an initial **Style_Sheet**.
-If `d-research-skill` is accessible, use it for source discovery and evidence logging.
+Mine candidate terms before translating. Activate `core/workflows/d-research-module.md` to produce a **Research_Dossier** (`core/schemas/research-dossier.md`) covering Track A (prior-translation term harvesting and pitfall auditing) and Track B (context, authorial intent, and transcreation mindset compass) before chunk translation starts.
+Seed `glossary.csv` from Tier-1 shared memory (`memory/glossary-<lang>.csv`) and build an initial **Style_Sheet** aligned with the target locale profile (e.g., `core/locales/vi-VN.md`).
+If `d-research-skill` is accessible, use it for source discovery and evidence logging (`evidence-ledger.jsonl` and `research-coverage.json`).
 Researcher roles may be dispatched in this phase under the research-tier gate defined in `core/workflows/subagents.md`.
 
 ### Phase 4 — Plan
@@ -53,6 +56,7 @@ When work will be delegated — or delegation is simulated sequentially — crea
 ### Phase 5 — Translate in Passes
 
 Dispatch chunk translators per the Subagent_Dispatch_Plan once the full readiness gate passes (see `core/workflows/subagents.md`), or execute the same plan sequentially. Paste the Worker Contract Card at the top of every worker prompt.
+Synchronize newly proposed recurring terms between waves via `glossary-inbox.jsonl` and `scripts/book_ops.py sync-glossary`. Every drafted chunk must pass independent Peer Cross-Check (`fidelity-reviewer` and `continuity-reviewer`) before transitioning to `done`.
 Each chunk goes through four mandatory passes:
 
 - **Pass A** — Draft faithful translation of one chunk.
@@ -62,16 +66,17 @@ Each chunk goes through four mandatory passes:
 
 ### Phase 6 — Merge and Final Voice Pass
 
-Merge chunk outputs in source order once all assigned chunks are `done`.
+Run `scripts/book_ops.py merge` (or merge chunk outputs in source order) once all assigned chunks are `done` to assemble the book into clean `.txt`, `.epub`, `.md`, or both (`.txt` + `.epub` via `--format both`), generate a Table of Contents, and record a Completeness Audit. When the input source is an `.epub` and the output is `.epub`, Layout-Preserving EPUB Mode copies the original package into `.source-template.epub` and retains all original CSS, fonts, images, cover art, OPF metadata/manifest/spine structure, and XHTML DOM containers/classes, substituting only translated text and localized TOC entries.
 Run cross-chunk consistency checks (terminology, headings, continuity, formal data), then a single centralized final voice pass. The voice pass is never delegated and never changes meaning.
 
 ### Phase 7 — QA Gates
 
-Run all eight QA gates before delivery: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting. Produce the **QA_Report**.
+Run `scripts/book_ops.py verify` for deterministic completeness, length/paragraph/heading parity, placeholder detection, and glossary compliance, alongside all eight mandatory QA gates: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting. Produce the **QA_Report**.
 For high-stakes material, require source-backed terminology decisions and explicit residual-risk notes.
 
 ### Phase 8 — Delivery
 
+Promote durable, approved high-confidence glossary terms back to Tier-1 shared memory via `scripts/book_ops.py sync-glossary --promote` after all QA gates pass.
 Deliver the translated output plus a short translator note: scope, assumptions, unresolved issues, terminology worth reviewing, QA checks performed, skill version, and residual risks.
 Deliver only after every QA gate has passed or its residual risks are documented in the QA_Report.
 
@@ -96,6 +101,7 @@ Workers propose; the Coordinator approves. No worker writes any shared artifact 
 | File | Concern |
 |------|---------|
 | `core/workflows/long-document.md` | Full staged workflow for books and large documents |
+| `core/workflows/d-research-module.md` | Modular Phase 3 `d-research` engine (Track A harvesting and Track B mindset formation) |
 | `core/workflows/terminology-research.md` | Term mining, source priority, d-research integration |
 | `core/workflows/fiction-continuity.md` | Story Bible maintenance, reveal-timing, character voice |
 | `core/workflows/technical-domain.md` | Domain Map maintenance, acronyms, units, citations |
@@ -108,6 +114,7 @@ Workers propose; the Coordinator approves. No worker writes any shared artifact 
 | File | Artifact |
 |------|----------|
 | `core/schemas/translation-brief.md` | Translation_Brief |
+| `core/schemas/research-dossier.md` | Research_Dossier |
 | `core/schemas/source-map.md` | Source_Map |
 | `core/schemas/glossary.md` | Glossary (CSV + Markdown forms) |
 | `core/schemas/style-sheet.md` | Style_Sheet |
@@ -119,6 +126,14 @@ Workers propose; the Coordinator approves. No worker writes any shared artifact 
 | `core/schemas/subagent-dispatch-plan.md` | Subagent_Dispatch_Plan |
 | `core/schemas/unresolved-issues.md` | Unresolved_Issues_Log |
 | `core/schemas/qa-report.md` | QA_Report |
+
+### Locale Profiles and Book Pipeline Tooling
+
+| File | Concern |
+|------|---------|
+| `core/locales/vi-VN.md` | Vietnamese localization, pronoun matrix, Han-Viet balance, anti-translatorese rules |
+| `memory/glossary-vi.csv` | Tier-1 cross-book Vietnamese shared translation memory |
+| `scripts/book_ops.py` | Deterministic book pipeline CLI (`init`, `convert`, `scan`, `sync-glossary`, `verify`, `merge`) |
 
 ### Prompts
 

@@ -24,7 +24,15 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-VALID_PLATFORMS = ("portable", "codex", "claude-code", "cursor", "opencode", "generic")
+VALID_PLATFORMS = (
+    "portable",
+    "codex",
+    "claude-code",
+    "cursor",
+    "opencode",
+    "antigravity",
+    "generic",
+)
 VALID_MODES = ("copy", "symlink", "dry-run")
 VALID_CORE_STRATEGIES = ("copy", "reference")
 MANIFEST_FILENAME = ".d-transcreate-manifest.json"
@@ -99,18 +107,32 @@ PORTABLE_ROOT_FILES = ("SKILL.md", "AGENTS.md")
 def collect_portable_files(repo_root):
     """
     Collect the portable root file set (relative to repo_root): the root
-    SKILL.md, AGENTS.md, and any templates/ files. core/ and metadata files
-    are handled separately by the standard copy logic.
+    SKILL.md and AGENTS.md. Shared pack assets (memory/, templates/,
+    scripts/book_ops.py), core/, and metadata files are handled separately.
     """
     results = []
     for name in PORTABLE_ROOT_FILES:
         if (repo_root / name).is_file():
             results.append(Path(name))
-    templates_dir = repo_root / "templates"
-    if templates_dir.is_dir():
-        for rel in collect_files(templates_dir):
-            results.append(Path("templates") / rel)
     return results
+
+
+def collect_shared_asset_files(repo_root):
+    """
+    Collect shared pack assets installed for every platform (including portable):
+    memory/, templates/, and scripts/book_ops.py.
+    Returns a sorted list of Path objects relative to repo_root.
+    """
+    results = []
+    for subdir_name in ("memory", "templates"):
+        subdir = repo_root / subdir_name
+        if subdir.is_dir():
+            for rel in collect_files(subdir):
+                results.append(Path(subdir_name) / rel)
+    book_ops = repo_root / "scripts" / "book_ops.py"
+    if book_ops.is_file():
+        results.append(Path("scripts") / "book_ops.py")
+    return sorted(results)
 
 
 def promote_staging(staging, dest):
@@ -120,6 +142,8 @@ def promote_staging(staging, dest):
             rel = src.relative_to(staging)
             dst = dest / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
+            if dst.is_symlink():
+                dst.unlink()
             shutil.copy2(src, dst)
 
 
@@ -172,7 +196,8 @@ def rewrite_core_paths_for_copy(content, rel_path):
 # ---------------------------------------------------------------------------
 
 
-def detect_conflicts(adapter_files, core_files, metadata_files, dest, core_strategy):
+def detect_conflicts(adapter_files, core_files, metadata_files, shared_files, dest,
+                     core_strategy, with_d_research=None):
     """
     Check which destination files already exist.
     Returns a list of conflicting destination paths.
@@ -180,25 +205,36 @@ def detect_conflicts(adapter_files, core_files, metadata_files, dest, core_strat
     conflicts = []
     for rel_path in adapter_files:
         dest_path = dest / rel_path
-        if dest_path.exists():
+        if dest_path.exists() or dest_path.is_symlink():
             conflicts.append(str(rel_path))
 
     for rel_path in metadata_files:
         dest_path = dest / rel_path
-        if dest_path.exists():
+        if dest_path.exists() or dest_path.is_symlink():
+            conflicts.append(str(rel_path))
+
+    for rel_path in shared_files:
+        dest_path = dest / rel_path
+        if dest_path.exists() or dest_path.is_symlink():
             conflicts.append(str(rel_path))
 
     if core_strategy == "copy":
         for rel_path in core_files:
             dest_path = dest / "core" / rel_path
-            if dest_path.exists():
+            if dest_path.exists() or dest_path.is_symlink():
                 conflicts.append(str(Path("core") / rel_path))
+
+    if with_d_research is not None:
+        mod_path = dest / "modules" / "d-research"
+        if mod_path.exists() or mod_path.is_symlink():
+            conflicts.append("modules/d-research")
 
     return conflicts
 
 
-def execute_copy(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-                 core_strategy, shared_core_path, force):
+def execute_copy(adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+                 shared_files, dest, core_strategy, shared_core_path, force,
+                 with_d_research=None):
     """
     Copy adapter files (and optionally core/) to destination.
     Returns list of file records for the manifest.
@@ -267,11 +303,34 @@ def execute_copy(adapter_dir, adapter_files, core_dir, core_files, metadata_file
             "from": str(rel_path).replace("\\", "/"),
         })
 
+    for rel_path in shared_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+
+        file_records.append({
+            "path": str(rel_path).replace("\\", "/"),
+            "sha256": sha256_file(dst),
+            "from": str(rel_path).replace("\\", "/"),
+        })
+
+    if with_d_research is not None:
+        mod_dst = dest / "modules" / "d-research"
+        mod_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(
+            with_d_research,
+            mod_dst,
+            ignore=shutil.ignore_patterns(".git", "__pycache__"),
+            dirs_exist_ok=True,
+        )
+
     return file_records
 
 
-def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-                    core_strategy, shared_core_path, force):
+def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+                    shared_files, dest, core_strategy, shared_core_path, force,
+                    with_d_research=None):
     """
     Create symlinks from destination to source files.
     Returns list of file records for the manifest.
@@ -332,11 +391,37 @@ def execute_symlink(adapter_dir, adapter_files, core_dir, core_files, metadata_f
             "from": str(rel_path).replace("\\", "/"),
         })
 
+    for rel_path in shared_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+
+        os.symlink(src.resolve(), dst)
+
+        file_records.append({
+            "path": str(rel_path).replace("\\", "/"),
+            "sha256": sha256_file(src),
+            "from": str(rel_path).replace("\\", "/"),
+        })
+
+    if with_d_research is not None:
+        mod_dst = dest / "modules" / "d-research"
+        mod_dst.parent.mkdir(parents=True, exist_ok=True)
+        if mod_dst.is_symlink():
+            mod_dst.unlink()
+        elif mod_dst.exists():
+            shutil.rmtree(mod_dst)
+        os.symlink(with_d_research.resolve(), mod_dst)
+
     return file_records
 
 
-def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-                    core_strategy, shared_core_path):
+def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+                    shared_files, dest, core_strategy, shared_core_path,
+                    with_d_research=None):
     """
     Print planned operations without writing anything.
     """
@@ -370,6 +455,16 @@ def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, metadata_f
         dst_display = str(dst).replace("\\", "/")
         print(f"  COPY: {src_display} -> {dst_display}")
 
+    for rel_path in shared_files:
+        src = repo_root / rel_path
+        dst = dest / rel_path
+        src_display = str(src.relative_to(repo_root)).replace("\\", "/")
+        dst_display = str(dst).replace("\\", "/")
+        print(f"  COPY: {src_display} -> {dst_display}")
+
+    if with_d_research is not None:
+        print(f"  MODULE: {with_d_research} -> {(dest / 'modules' / 'd-research').as_posix()}")
+
     if core_strategy == "reference" and shared_core_path:
         print(f"\n  Core references rewritten to: {shared_core_path}")
 
@@ -377,13 +472,14 @@ def execute_dry_run(adapter_dir, adapter_files, core_dir, core_files, metadata_f
         len(adapter_files)
         + (len(core_files) if core_strategy == "copy" else 0)
         + len(metadata_files)
+        + len(shared_files)
     )
     print(f"\n  Total files: {total_files}")
     print("  Manifest: NOT written (dry-run mode)")
 
 
 def write_manifest(dest, platform, mode, core_strategy, shared_core_path,
-                   file_records):
+                   file_records, bundled_modules=None):
     """
     Write .d-transcreate-manifest.json to the destination.
 
@@ -406,6 +502,8 @@ def write_manifest(dest, platform, mode, core_strategy, shared_core_path,
 
     if core_strategy == "reference" and shared_core_path:
         manifest["shared_core_path"] = shared_core_path
+    if bundled_modules:
+        manifest["bundled_modules"] = bundled_modules
 
     manifest_path = dest / MANIFEST_FILENAME
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -479,6 +577,13 @@ def build_parser():
         action="store_false",
         help="Skip post-build validation.",
     )
+    parser.add_argument(
+        "--with-d-research",
+        type=str,
+        default=None,
+        dest="with_d_research",
+        help="Optional path to a local d-research-skill directory to bundle at <dest>/modules/d-research.",
+    )
     return parser
 
 
@@ -501,6 +606,14 @@ def main():
         print(f"ERROR: Core directory not found: {core_dir}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
+    with_d_research = None
+    if args.with_d_research:
+        with_d_research = Path(args.with_d_research).expanduser().resolve()
+        if not with_d_research.is_dir():
+            print(f"ERROR: --with-d-research directory not found: {with_d_research}",
+                  file=sys.stderr)
+            sys.exit(EXIT_ERROR)
+
     # Resolve the installable file set for the requested platform.
     if args.platform == "portable":
         adapter_dir = repo_root
@@ -514,6 +627,7 @@ def main():
 
     core_files = collect_files(core_dir) if args.core_strategy == "copy" else []
     metadata_files = [Path(p) for p in METADATA_FILES if (repo_root / p).is_file()]
+    shared_files = collect_shared_asset_files(repo_root)
 
     if not adapter_files:
         print(f"ERROR: No installable files found for platform: {args.platform}",
@@ -523,15 +637,17 @@ def main():
     # Dry-run mode: print and exit
     if args.mode == "dry-run":
         execute_dry_run(
-            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-            args.core_strategy, args.shared_core_path,
+            adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+            shared_files, dest, args.core_strategy, args.shared_core_path,
+            with_d_research=with_d_research,
         )
         sys.exit(EXIT_SUCCESS)
 
     # Conflict detection (skip if --force)
     if not args.force:
         conflicts = detect_conflicts(
-            adapter_files, core_files, metadata_files, dest, args.core_strategy,
+            adapter_files, core_files, metadata_files, shared_files, dest,
+            args.core_strategy, with_d_research=with_d_research,
         )
         if conflicts:
             print("CONFLICT: The following files already exist at the destination:",
@@ -543,6 +659,7 @@ def main():
 
     # Create destination directory
     dest.mkdir(parents=True, exist_ok=True)
+    bundled_modules = ["modules/d-research"] if with_d_research is not None else None
 
     # Execute the operation. Copy mode prepares a full staging tree first, then
     # promotes it into the destination only after all staged files are ready.
@@ -550,25 +667,31 @@ def main():
         staging = Path(tempfile.mkdtemp(prefix="dtc-staging-"))
         try:
             file_records = execute_copy(
-                adapter_dir, adapter_files, core_dir, core_files, metadata_files, staging,
-                args.core_strategy, args.shared_core_path, args.force,
+                adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+                shared_files, staging, args.core_strategy, args.shared_core_path,
+                args.force, with_d_research=with_d_research,
             )
             write_manifest(
                 staging, args.platform, args.mode, args.core_strategy,
-                args.shared_core_path, file_records,
+                args.shared_core_path, file_records, bundled_modules=bundled_modules,
             )
+            if with_d_research is not None:
+                dest_mod = dest / "modules" / "d-research"
+                if dest_mod.is_symlink():
+                    dest_mod.unlink()
             promote_staging(staging, dest)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
         manifest_path = dest / MANIFEST_FILENAME
     elif args.mode == "symlink":
         file_records = execute_symlink(
-            adapter_dir, adapter_files, core_dir, core_files, metadata_files, dest,
-            args.core_strategy, args.shared_core_path, args.force,
+            adapter_dir, adapter_files, core_dir, core_files, metadata_files,
+            shared_files, dest, args.core_strategy, args.shared_core_path,
+            args.force, with_d_research=with_d_research,
         )
         manifest_path = write_manifest(
             dest, args.platform, args.mode, args.core_strategy,
-            args.shared_core_path, file_records,
+            args.shared_core_path, file_records, bundled_modules=bundled_modules,
         )
     else:
         print(f"ERROR: Unknown mode: {args.mode}", file=sys.stderr)

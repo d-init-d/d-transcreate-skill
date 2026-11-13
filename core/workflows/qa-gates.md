@@ -28,7 +28,13 @@ Check:
 - Repeated boilerplate is translated consistently.
 - Placeholders, variables, code identifiers, formulas, citations, and URLs are preserved.
 
-**Method:** Compare the Source_Map structure against the output structure. Every entry in the Source_Map must have a corresponding translated element.
+**Method:** Compare the Source_Map structure against the output structure, and run deterministic verification:
+
+```bash
+python3 scripts/book_ops.py verify --workspace <dir>
+```
+
+`book_ops.py verify` enforces 100% chunk coverage between `.book-scan-meta.json` and `chunk-manifest.csv`, requires every row to be `done` with a non-empty output file, verifies target/source length parity (`--min-word-ratio`, `--min-char-ratio`), paragraph parity, and heading parity, and rejects placeholder markers (such as `[omitted]`, `[truncated]`, or unresolved task markers) and unclosed fenced code blocks. Every entry in the Source_Map must have a corresponding translated element.
 
 ---
 
@@ -65,7 +71,9 @@ Check:
 - Names, titles, ranks, organizations, product names, laws, and standards are consistent.
 - Ambiguous terms are resolved or listed in the Unresolved_Issues_Log.
 
-**Fiction-specific:** Check terms of address, titles, pronouns, nicknames, and relationship markers against the Story_Bible.
+**Fiction-specific:** Check terms of address, titles, pronouns, nicknames, and relationship markers against the Story_Bible and the `Research_Dossier` Pronoun and Address Matrix.
+
+**Deterministic check:** `python3 scripts/book_ops.py verify --workspace <dir>` scans every translated chunk against `glossary.csv`, failing with an error whenever any `forbidden_translation` appears and flagging missing `preferred_translation` renderings for approved source terms present in the chunk (escalated to errors under `--strict`).
 
 ---
 
@@ -187,6 +195,8 @@ The QA_Report is the final artifact before delivery and must be persisted to the
 ---
 
 ## Assigning QA Work to Subagents
+
+Before any chunk transitions from `drafted` to `done`, it must pass **Mandatory Peer Cross-Check** (`core/workflows/subagents.md`): `fidelity-reviewer` checks paragraph-level completeness, zero omissions/additions, and formal data, while `continuity-reviewer` checks boundary handshakes between adjacent chunks, character voice/pronoun matrix alignment (`Research_Dossier`), and shared glossary compliance.
 
 When subagents are available, the Coordinator_Subagent may dispatch QA checks to specialized Worker_Subagents:
 

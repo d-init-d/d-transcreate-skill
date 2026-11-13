@@ -1,7 +1,7 @@
 # Context Plan
 
 ## Identification
-- skill_version: 0.5.0
+- skill_version: 1.0.0
 - platform: Generic
 - model_or_agent: unknown
 - known_context_window: unknown
