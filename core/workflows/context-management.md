@@ -95,11 +95,11 @@ All translation state SHALL be persisted as files in the workspace — never sol
 - `source-map.md`
 - `glossary.csv` or `glossary.md`
 - `glossary-inbox.jsonl`
-- `evidence-ledger.jsonl` and `research-coverage.json`
+- `evidence-ledger.jsonl`, `evidence-ledger.csv`, and `research-coverage.json`
 - `style-sheet.md`
 - `story-bible.md` or `domain-map.md`
 - `chunk-manifest.csv` or `chunk-manifest.md`
-- `.book-scan-meta.json` and `source_chunks/`
+- `.book-scan-meta.json`, `candidate-terms.json`, `source_chunks/`, and `packets/`
 - `chunk-summaries.md`
 - `unresolved-issues.md`
 - `qa-report.md`
@@ -140,7 +140,7 @@ When loading context for a chunk, select artifact slices as follows:
 - **Chunk_Summary slices**: Previous and next summaries only; never load full neighboring chunks by default.
 - **Unresolved_Issues slice**: Only issues scoped to the current chunk, its dependencies, or related characters/terms/concepts.
 
-Never load full artifacts when slices suffice. The Context_Plan's `artifact_slice_policy` field documents the slicing approach for the run.
+Never load full artifacts when slices suffice. Use `python3 scripts/book_ops.py bundle-chunk --workspace <dir> --chunk <chunk_id> --role <role>` to build pre-filtered worker packets containing only matching glossary/dossier/continuity rows, or slice manually per the policy in `Context_Plan`'s `artifact_slice_policy`.
 
 ## Context Overflow Fallback
 

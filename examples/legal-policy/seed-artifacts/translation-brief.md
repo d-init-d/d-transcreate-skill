@@ -2,7 +2,7 @@
 
 ## Source
 - Source files: source/privacy-policy.md
-- Skill version: 1.0.0
+- Skill version: 1.1.0
 - Source language: en (English)
 
 ## Target

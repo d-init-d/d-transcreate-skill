@@ -122,8 +122,9 @@ WORKER CONTRACT CARD — d-transcreate {skill_version}. Read this first.
    resolve it, use the best available rendering, mark it uncertain, and list
    it in uncertain_items / unresolved_items.
 5. Preserve formal data exactly: numbers, dates, citations, URLs, code
-   identifiers, equation labels, table references. Apply format conversions
-   only where the Translation_Brief or Style_Sheet documents the rule.
+   identifiers, equation labels, table references. Keep any `<!-- @bN -->`
+   block anchor lines and Markdown footnote/cross-ref links intact for EPUB runs.
+   Apply format conversions only where Translation_Brief or Style_Sheet allows.
 6. Follow the approved Glossary and Style_Sheet slices you were given. Never
    deviate from an approved entry without flagging it.
 7. Fiction: respect reveal timing — never expose a hidden fact earlier than
@@ -215,8 +216,8 @@ To prevent parallel workers from inventing conflicting translations for newly en
    - In **Mode 1 (Swarm)**: post the term proposal immediately to `@coordinator` / `@terminology-researcher` on the board (and record it in `glossary_proposals`), using the best provisional rendering until locked.
    - In **Mode 2 (Wave Spawner)**: return the entry in `glossary_proposals` and, when authorized by the dispatch unit, append a JSON line (`term`, `preferred_translation`, `term_class`, `context`, `source_location`, `evidence`, `confidence`) to `<workspace>/glossary-inbox.jsonl`.
    - Workers NEVER mutate `<workspace>/glossary.csv` directly.
-3. **Coordinator Lock & Wave Sync**: Between waves (or immediately upon board mention in Mode 1), the Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir>`, resolves any conflicting proposals, sets accepted rows to `status=approved` in `<workspace>/glossary.csv`, and distributes updated Glossary slices to subsequent waves and reviewers.
-4. **End-of-Book Promotion (Phase 8)**: After all QA gates pass, Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>` to export durable `approved` + `high` confidence terms back into `memory/glossary-<target_lang>.csv`.
+3. **Coordinator Lock & Wave Sync**: Between waves (or immediately upon board mention in Mode 1), the Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir> [--approve-clean]`, resolves any conflicting proposals, sets accepted rows to `status=approved` in `<workspace>/glossary.csv`, bridges `evidence-ledger.jsonl` / `evidence-ledger.csv`, and distributes updated Glossary slices (`bundle-chunk`) to subsequent waves and reviewers.
+4. **End-of-Book Promotion (Phase 8)**: After all QA gates pass, Coordinator runs `scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>` to export durable reusable `approved` + `high` confidence terms back into `memory/glossary-<target_lang>.csv` (project-specific proper nouns and `[no-promote]` items are automatically skipped unless `--include-proper-nouns` is set).
 
 ## Mandatory Peer Cross-Check Protocol
 

@@ -69,22 +69,22 @@ Return a structured response containing ALL of the following fields:
 
 ## Procedure
 
-1. **Initialize workspace and scan source.** For book or long-document runs, initialize the workspace deterministically via `scripts/book_ops.py init` (which copies templates, seeds `glossary.csv` from `memory/glossary-<lang>.csv`, and notes `core/locales/vi-VN.md` when target is Vietnamese) and segment source chapters/sections cleanly at paragraph boundaries via `scripts/book_ops.py scan` (producing `source-map.md`, `chunk-manifest.csv`, `source_chunks/`, and `.book-scan-meta.json`).
+1. **Initialize workspace and scan source.** For book or long-document runs, initialize the workspace deterministically via `scripts/book_ops.py init [--domain <fiction|technical|legal|general>]` (which copies templates, seeds `glossary.csv` from `memory/glossary-<lang>.csv`, creates dual evidence ledgers, and notes `core/locales/vi-VN.md` when target is Vietnamese) and segment source chapters/sections cleanly at paragraph boundaries via `scripts/book_ops.py scan` (producing `source-map.md`, `candidate-terms.json`, `chunk-manifest.csv`, anchor-locked `source_chunks/`, and `.book-scan-meta.json`).
 
-2. **Verify readiness gate.** The gate has two tiers (see `core/workflows/subagents.md`). Research tier — terminology-researcher and style-researcher may be dispatched once the Translation_Brief and Source_Map exist on disk and their research units are recorded in a Subagent_Dispatch_Plan (max 2 parallel researchers until a Context_Plan exists). Execute `core/workflows/d-research-module.md` to produce `Research_Dossier` (`research-dossier.md`), seeding `<workspace>/glossary.csv` via `scripts/book_ops.py sync-glossary --seed`. Full tier — before dispatching any chunk-translator or reviewer, confirm that ALL required artifacts exist on disk: Translation_Brief, Source_Map, Research_Dossier, Glossary (with at minimum seeded/proposed core terms), Style_Sheet (including target locale conventions), Chunk_Manifest, Context_Plan, Subagent_Dispatch_Plan, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
+2. **Verify readiness gate.** The gate has two tiers (see `core/workflows/subagents.md`). Research tier — terminology-researcher and style-researcher may be dispatched once the Translation_Brief and Source_Map exist on disk and their research units are recorded in a Subagent_Dispatch_Plan (max 2 parallel researchers until a Context_Plan exists). Execute `core/workflows/d-research-module.md` (feeding `candidate-terms.json`) to produce `Research_Dossier` (`research-dossier.md`), seeding `<workspace>/glossary.csv` via `scripts/book_ops.py sync-glossary --seed --domain <domain> --filter-to-source`. Full tier — before dispatching any chunk-translator or reviewer, confirm that ALL required artifacts exist on disk: Translation_Brief, Source_Map, Research_Dossier, Glossary (with at minimum seeded/proposed core terms), Style_Sheet (including target locale conventions and Golden Voice Calibration Sample), Chunk_Manifest, Context_Plan, Subagent_Dispatch_Plan, and Story_Bible or Domain_Map. If any artifact is missing or incomplete, produce it before proceeding.
 
 3. **Detect runtime mode and plan dispatch.** Auto-detect the host runtime capability (`Mode 1: Native Swarm / Shared Board`, `Mode 2: Subagent Spawner + Messaging`, or `Mode 3: Sequential Single-Agent Fallback` per `core/workflows/subagents.md`) and record it in `Subagent_Dispatch_Plan`. Review the Chunk_Manifest and Context_Plan. Identify chunks whose status is `ready` or `research-needed`. For `research-needed` chunks, dispatch terminology or style researchers first. For `ready` chunks, dispatch chunk translators with disjoint scopes. Respect the Context_Plan's `max_parallel_workers` limit. Reduce chunk size if context pressure is anticipated.
 
-4. **Prepare worker prompts.** For each Worker_Subagent dispatch, assemble a structured prompt containing:
+4. **Prepare worker prompts.** Assemble scoped worker packets via `scripts/book_ops.py bundle-chunk --workspace <dir> --chunk <chunk_id> --role <role>` (or build manually) ensuring every Worker_Subagent dispatch starts with:
    - The **Worker Contract Card** from `core/workflows/subagents.md`, pasted verbatim at the very top with its placeholders filled. This re-anchors the binding rules at every dispatch and is mandatory for every worker, every time.
    - Role declaration and chunk or scope ID.
    - Source material (chunk text from `source_chunks/`, term list, or output chunk for review).
    - Target context (language, locale profile such as `core/locales/vi-VN.md`, audience, mode).
-   - Relevant artifact slices (not full artifacts): Translation_Brief excerpt, `Research_Dossier` mindset and Pronoun & Address Matrix excerpt, synced Glossary rows for terms in this scope, Style_Sheet rules applicable to this content type, Story_Bible or Domain_Map notes for entities in this scope.
+   - Relevant artifact slices (not full artifacts): Translation_Brief excerpt, `Research_Dossier` mindset and Pronoun & Address Matrix excerpt, synced Glossary rows for terms in this scope, Style_Sheet rules (including Golden Voice Calibration Sample), Story_Bible or Domain_Map notes for entities in this scope.
    - Adjacent Chunk_Summary entries (previous and next, when available).
    - Exact output contract the worker must return.
 
-5. **Dispatch workers and run live glossary wave sync.** Assign each worker a non-overlapping scope. Ensure no two workers operate on the same chunk simultaneously. Ensure no two workers write to the same output file. Between parallel waves (or on board `@coordinator` mention in Swarm mode), run `scripts/book_ops.py sync-glossary --workspace <dir>` to ingest `<workspace>/glossary-inbox.jsonl`, deduplicate proposals, resolve term conflicts, and lock approved terms in `<workspace>/glossary.csv` before dispatching subsequent waves.
+5. **Dispatch workers and run live glossary wave sync.** Assign each worker a non-overlapping scope. Ensure no two workers operate on the same chunk simultaneously. Ensure no two workers write to the same output file. Between parallel waves (or on board `@coordinator` mention in Swarm mode), run `scripts/book_ops.py sync-glossary --workspace <dir> [--approve-clean]` to ingest `<workspace>/glossary-inbox.jsonl`, deduplicate proposals, resolve term conflicts, lock approved terms in `<workspace>/glossary.csv`, and bridge `evidence-ledger.jsonl` / `evidence-ledger.csv` before dispatching subsequent waves.
 
 6. **Collect outputs and run Mandatory Peer Cross-Check loop.** Do NOT mark a chunk `done` on the translator's draft alone. For every drafted chunk:
    - Validate the structured output contains all required fields.
@@ -101,26 +101,18 @@ Return a structured response containing ALL of the following fields:
    - Record the conflict and resolution in the Glossary or Style_Sheet notes.
    - Apply the resolution uniformly across all affected chunks.
 
-8. **Verify deterministically and merge outputs in source order.** Once all assigned chunks have status `done`:
-   - Run `scripts/book_ops.py verify --workspace <dir>` to enforce 100% chapter/manifest completeness, word/paragraph/heading parity, placeholder/truncation absence, and zero `forbidden_translation` violations. Fix any failing chunk before proceeding.
-   - Assemble chunk outputs in exact `Chunk_Manifest` order via `scripts/book_ops.py merge --workspace <dir> --out <output_path>` (which generates the Table of Contents and records the Completeness Audit in `qa-report.md`).
-   - Verify no gaps or overlaps exist between chunk boundaries and every chunk in the manifest is accounted for.
+8. **Run cross-chunk consistency checks and Sliding-Window Voice Pass.** Once all assigned chunks pass Peer Cross-Check (`done`):
+   - Check terminology, headings, table labels, captions, footnotes, references, and punctuation across `output/<chunk_id>.md` boundaries, applying any resolved glossary conflicts back to affected chunk outputs before final assembly.
+   - Run a single centralized **Sliding-Window Voice & Seam Pass** across consecutive 2–3 chunk windows directly on `output/<chunk_id>.md` so long books avoid context overflow and `.txt`, `.md`, and `.epub` deliverables remain 100% synchronized. Never delegate this pass and never alter meaning.
 
-9. **Run cross-chunk consistency checks.** After merge, verify:
-   - Approved Glossary terms are applied identically across all chunks.
-   - Style_Sheet and locale rules are applied uniformly.
-   - Headings, table labels, captions, footnotes, references, and punctuation are consistent.
-   - Names, pronouns, timeline references, and continuity threads are coherent.
-   - Numbers, citations, URLs, and formal data match the source.
+9. **Verify deterministically and merge outputs in source order.**
+   - Run `scripts/book_ops.py verify --workspace <dir> [--require-dossier --enforce-glossary]` to enforce 100% chapter/manifest completeness, language-pair parity, formal-data/URL parity, zero CJK leakage, locale consistency, and zero `forbidden_translation` violations. Fix any failing chunk before proceeding.
+   - Assemble chunk outputs in exact `Chunk_Manifest` order via `scripts/book_ops.py merge --workspace <dir> --out <output_path>` (which generates the Table of Contents, runs Anchor-Locked Layout-Preserving EPUB assembly when applicable, and records the Completeness Audit in `qa-report.md`).
 
-10. **Run final voice pass.** Perform a single centralized voice pass over the entire merged output:
-    - Ensure author voice, register, and rhythm match the `Research_Dossier` Transcreation Mindset and Style_Sheet from start to finish.
-    - Smooth transitions between chunks where voice drift occurred.
-    - Preserve meaning — do not alter substance during the voice pass.
-    - This pass is performed centrally, not delegated to individual workers.
+10. **Audit final deliverables.** Confirm the merged output, `qa-report.md`, and `unresolved-issues.md` match the Translation_Brief quality bar.
 
-11. **Update state artifacts and promote memory.** After the final voice pass and final `scripts/book_ops.py verify`:
-    - Write accepted Glossary entries to the canonical `<workspace>/glossary.csv` and promote durable `approved` + `high` confidence entries to Tier 1 memory via `scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>`.
+11. **Update state artifacts and promote memory.** After final `scripts/book_ops.py verify` passes:
+    - Write accepted Glossary entries to `<workspace>/glossary.csv` and promote durable reusable `approved` + `high` confidence entries to Tier 1 memory via `scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>` (story-specific proper nouns and `[no-promote]` items are automatically skipped unless `--include-proper-nouns` is set).
     - Write accepted Style_Sheet rules to the canonical Style_Sheet file.
     - Update Story_Bible or Domain_Map with accepted continuity facts.
     - Update all Chunk_Summary entries for completed chunks.

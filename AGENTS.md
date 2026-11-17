@@ -36,7 +36,7 @@ The single source of truth lives under `core/`:
 ## Shared Memory & Book CLI
 
 - `memory/glossary-vi.csv` — persistent Tier-1 cross-book Vietnamese translation memory (`memory/README.md`).
-- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `convert`, `scan`, `sync-glossary`, `verify`, `merge`) for `.pdf` -> `.txt`/`.epub` conversion, Zero-Config Book Mode, `.txt`/`.epub` output generation, and 100% chapter coverage verification.
+- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `convert`, `scan`, `mine-terms`, `bundle-chunk`, `sync-glossary`, `verify`, `merge`) for `.pdf` -> `.txt`/`.epub` conversion, Zero-Config Book Mode, whole-book entity mining, scoped packet slicing, Anchor-Locked EPUB rebuild, and deep verification.
 
 ## Required Artifacts
 

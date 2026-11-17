@@ -14,9 +14,10 @@ At the start of Phase 3, execute these initialization steps before launching ter
 2. **Two-Tier Glossary Seeding:**
    - Before searching the web for common literary, structural, or domain terms, seed the project's `glossary.csv` from Global Translation Memory (`memory/glossary-<target_lang>.csv`, e.g., `memory/glossary-vi.csv`) using:
      ```bash
-     python3 scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang <lang>
+     python3 scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang <lang> [--domain <domain>] [--filter-to-source]
      ```
    - Skip redundant web searches for candidates already covered at `high` confidence by the seeded `glossary.csv`, unless source context indicates a work-specific sense conflict.
+   - Load `<workspace>/candidate-terms.json` produced by `scripts/book_ops.py scan` (or `mine-terms`) to ensure recurring names, acronyms, and special terms across the full book are researched.
 3. **Select Research Track:**
    - **Track A (`official_published`, `community_established`, or `partial`):** Perform prior-translation harvesting for canonical character names, toponyms, organizations, ranks, titles, worldbuilding/special terms, and established pronoun pairings. Audit prior editions to extract known mistranslations, awkward calques, and disputed renderings into `forbidden_translation` (and `Existing Translations Audit` in `research-dossier.md`).
    - **Track B (`none` — Uncharted Work, plus voice grounding for Track A):** Investigate historical, cultural, and domain context; analyze authorial intent and `source_voice_signature`; map the 4-rung Register Ladder (`Canonical/Formal` <-> `Mainstream/Lay` <-> `Community/Domain Jargon` <-> `Vernacular/Slang`); and formulate the Transcreation Mindset, Voice Compass, and Neologism Policy in `research-dossier.md`.

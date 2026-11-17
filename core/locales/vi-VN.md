@@ -6,41 +6,41 @@ Auto-load this profile whenever `Translation_Brief` specifies `target_language` 
 
 ## 1. Vietnamese Pronoun and Terms of Address System
 
-Vietnamese pronouns encode age, kinship, hierarchy, intimacy, gender, and emotional stance in every utterance. Never translate `I` and `you` mechanically as `toi` and `ban` across a book.
+Vietnamese pronouns encode age, kinship, hierarchy, intimacy, gender, and emotional stance in every utterance. Never translate `I` and `you` mechanically as `tôi` and `bạn` across a book.
 
 ### 1.1 Core Axes
 
-- **Age and Kinship**: `anh/em`, `chi/em`, `chu/chau`, `bac/chau`, `co/chau`, `ong/chau`, `ba/chau`, `bo-cha/con`, `me-ma/con`.
-- **Hierarchy and Respect**: `ngai` (dignitary/official), `ong/ba` (formal adult), `quy vi` (plural formal audience), `thay/con` or `thay/em` (teacher-student), `su phu/de tu` (master-disciple), `be ha / than` (monarch-subject).
-- **Intimacy and Peer Dynamics**: `cau/to` (warm school/young-adult peers), `minh/cau` or `anh/em` (affectionate), `may/tao` (childhood best friends, street slang, or open hostility), `han/y/ga/mu` (third-person distance, suspicion, or contempt).
+- **Age and Kinship**: `anh/em`, `chị/em`, `chú/cháu`, `bác/cháu`, `cô/cháu`, `ông/cháu`, `bà/cháu`, `bố-cha/con`, `mẹ-má/con`.
+- **Hierarchy and Respect**: `ngài` (dignitary/official), `ông/bà` (formal adult), `quý vị` (plural formal audience), `thầy/con` or `thầy/em` (teacher-student), `sư phụ/đệ tử` (master-disciple), `bệ hạ / thần` (monarch-subject).
+- **Intimacy and Peer Dynamics**: `cậu/tớ` (warm school/young-adult peers), `mình/cậu` or `anh/em` (affectionate), `mày/tao` (childhood best friends, street slang, or open hostility), `hắn/y/gã/mụ` (third-person distance, suspicion, or contempt).
 
 ### 1.2 Genre Presets
 
 | Genre / Domain | Default Pronoun Baseline | Guidance |
 |---|---|---|
-| Historical / Fantasy / Wuxia / Xianxia | `ta/nguoi`, `tai ha/cac ha`, `huynh/de`, `ty/muoi`, `tien sinh`, `ton gia`, `be ha` | Match period gravity and martial/court hierarchy; avoid modern urban pronouns (`cau/to`, `ban`) unless deliberate comic contrast. |
-| Modern Western Fiction | `toi/anh`, `anh/em`, `toi/co`, `cau/to`, `may/tao` | Infer age and intimacy from context and `Story_Bible`; reserve `toi/ban` for wary strangers, business equals, or cold politeness. |
-| Non-Fiction / Technical / Legal | `ban` or `chung ta` (reader-inclusive), `quy doc gia`, `tac gia`, impersonal/active phrasing | Keep consistent across the whole book; avoid shifting randomly between `ban`, `cac ban`, and `quy vi`. |
+| Historical / Fantasy / Wuxia / Xianxia | `ta/ngươi`, `tại hạ/các hạ`, `huynh/đệ`, `tỷ/muội`, `tiên sinh`, `tôn giả`, `bệ hạ` | Match period gravity and martial/court hierarchy; avoid modern urban pronouns (`cậu/tớ`, `bạn`) unless deliberate comic contrast. |
+| Modern Western Fiction | `tôi/anh`, `anh/em`, `tôi/cô`, `cậu/tớ`, `mày/tao` | Infer age and intimacy from context and `Story_Bible`; reserve `tôi/bạn` for wary strangers, business equals, or cold politeness. |
+| Non-Fiction / Technical / Legal | `bạn` or `chúng ta` (reader-inclusive), `quý độc giả`, `tác giả`, impersonal/active phrasing | Keep consistent across the whole book; avoid shifting randomly between `bạn`, `các bạn`, and `quý vị`. |
 
 ### 1.3 Mid-Scene Shifts and Continuity
 
 - Map every recurring speaker-addressee pair in the `Research_Dossier` Pronoun and Address Matrix before Phase 5 begins.
-- A mid-scene pronoun shift (e.g., `toi/anh` -> `em/anh` or `cau/to` -> `may/tao`) is valid **only** when triggered by an emotional rupture, confession, rank reversal, or reveal.
+- A mid-scene pronoun shift (e.g., `tôi/anh` -> `em/anh` or `cậu/tớ` -> `mày/tao`) is valid **only** when triggered by an emotional rupture, confession, rank reversal, or reveal.
 - Document intentional shifts in `Story_Bible` and `Chunk_Summary` so `continuity-reviewer` distinguishes deliberate narrative pivots from accidental drift.
 
 ---
 
-## 2. Sino-Vietnamese (Han-Viet) vs. Native Vietnamese (Thuan Viet) Balance
+## 2. Sino-Vietnamese (Hán-Việt) vs. Native Vietnamese (Thuần Việt) Balance
 
 Vietnamese prose draws tonal weight from balancing two lexical strata:
 
-- **Sino-Vietnamese (Han-Viet)** — conveys formality, philosophical abstraction, legal authority, historical gravitas, and mythic scale (e.g., `cong ly`, `giao uoc`, `dinh menh`, `co vat`, `tham quyen`, `bien nien su`).
-- **Native Vietnamese (Thuan Viet)** — conveys sensory immediacy, physical action, emotional warmth, humor, and colloquial speech (e.g., `dau thuong`, `run ray`, `nong ran`, `gion mat`, `chia tay`).
+- **Sino-Vietnamese (Hán-Việt)** — conveys formality, philosophical abstraction, legal authority, historical gravitas, and mythic scale (e.g., `công lý`, `giao ước`, `định mệnh`, `cổ vật`, `thẩm quyền`, `biên niên sử`).
+- **Native Vietnamese (Thuần Việt)** — conveys sensory immediacy, physical action, emotional warmth, humor, and colloquial speech (e.g., `đau thương`, `run rẩy`, `nóng rực`, `giỡn mặt`, `chia tay`).
 
 ### Register Calibration Rules
 
-1. Match the stratum to the narrator and speaker: an archaic chronicler or legal code leans Han-Viet; a street urchin's dialogue leans Thuan Viet.
-2. Avoid tonal whiplash within one sentence (for example, pairing high-court Han-Viet phrasing with modern internet slang unless parody is intended).
+1. Match the stratum to the narrator and speaker: an archaic chronicler or legal code leans Hán-Việt; a street urchin's dialogue leans Thuần Việt.
+2. Avoid tonal whiplash within one sentence (for example, pairing high-court Hán-Việt phrasing with modern internet slang unless parody is intended).
 3. Use `memory/glossary-vi.csv` for pre-solved canonical renderings of recurring literary, legal, psychological, and technical concepts.
 
 ---
@@ -51,8 +51,8 @@ Follow the `Research_Dossier` classification (`official_published`, `community_e
 
 1. **Retain Source Spelling**: Keep modern Western, Latin-script personal names, brands, and contemporary places in original form (`Sherlock Holmes`, `London`, `MIT`) when standard in modern Vietnamese publishing.
 2. **Track A Canon First**: If an official or widely established Vietnamese translation exists, inherit its canonical personal names, toponyms, and signature terms unless `Translation_Brief` specifies a fresh re-translation.
-3. **East Asian Classical / Historical Names**: Follow standard Han-Viet reading for classical Chinese/historical names and titles when appropriate to the genre and target-market canon.
-4. **Descriptive Epithets, Titles, and Organizations**: Translate meaningful titles, ranks, guilds, artifacts, and spells (`The High Council` -> `Hoi dong Toi cao` / approved canon) and lock them in `glossary.csv`.
+3. **East Asian Classical / Historical Names**: Follow standard Hán-Việt reading for classical Chinese/historical names and titles when appropriate to the genre and target-market canon.
+4. **Descriptive Epithets, Titles, and Organizations**: Translate meaningful titles, ranks, guilds, artifacts, and spells (`The High Council` -> `Hội đồng Tối cao` / approved canon) and lock them in `glossary.csv`.
 5. **First-Mention Glosses**: When an opaque cultural term or neologism needs clarification and `Style_Sheet` allows notes, add a single concise inline parenthetical or `[ND: ...]` footnote on first mention only; never repeat glosses in later chunks.
 
 ---
@@ -63,29 +63,29 @@ Check every chunk during Pass C (`chunk-translator`) and Peer Cross-Check (`cont
 
 | Forbidden Pattern | Why It Fails in Vietnamese | Preferred Natural Remedy |
 |---|---|---|
-| Mechanical passive `bi` / `duoc` | Overusing `bi` for neutral events or `duoc` for inanimate subjects (`canh cua duoc mo boi anh ay`) sounds robotic. | Use active voice (`anh mo cua`) or natural Vietnamese topic-comment order (`cua da mo`). Reserve `bi` for adverse events and `duoc` for genuine benefit/receipt. |
-| Mechanical `-ly` adverbial calques (`mot cach ...`) | Strings like `anh nhin co mot cach buon ba` feel stiff and translated. | Use direct verb-adjective combinations or idiomatic adverbs (`anh nhin co buon ba`, `anh buon ba nhin co`). |
-| Abstract nominalization bloat (`su ...`, `viec ...`, `tinh ...`) | Literal noun chains (`viec thuc hien su phat trien cua ...`) weigh down prose. | Convert abstract nouns back into clear verbs and actors (`phat trien ...`, `khi ho thuc hien ...`). |
-| Stiff relative-clause chains (`ma`, `cai ma`, `nguoi ma`, `noi ma`) | Chaining multiple `ma` clauses mirrors English `which/who/where` syntax awkwardly. | Split long sentences into natural sequential clauses or omit redundant `ma` connectors. |
-| Redundant possessives (`cua toi`, `cua anh ay`, `cua co ay`) | Translating every `his/her/my` (`anh ta dat tay cua anh ta len vai cua co ta`) bloats dialogue and action. | Drop `cua` when ownership is obvious from context (`anh dat tay len vai co`). |
-| Calqued copulas and tense markers (`la mot`, `da va dang`, `o trong`) | Mechanical `da va dang` or `la mot nguoi dan ong cao lon` reads like machine translation. | Use natural aspect markers (`van dang`, `tung`) or drop redundant `mot` before predicative adjectives/nouns. |
+| Mechanical passive `bị` / `được` | Overusing `bị` for neutral events or `được` for inanimate subjects (`cánh cửa được mở bởi anh ấy`) sounds robotic. | Use active voice (`anh mở cửa`) or natural Vietnamese topic-comment order (`cửa đã mở`). Reserve `bị` for adverse events (`bị thương`, `bị phạt`) and `được` for genuine benefit/receipt (`được khen`, `được trao`). |
+| Mechanical `-ly` adverbial calques (`một cách ...`) | Strings like `anh nhìn cô một cách buồn bã` feel stiff and translated. | Use direct verb-adjective combinations or idiomatic adverbs (`anh buồn bã nhìn cô`, `anh nhìn cô đầy buồn bã`). |
+| Abstract nominalization bloat (`sự ...`, `việc ...`, `tính ...`) | Literal noun chains (`việc thực hiện sự phát triển của ...`) weigh down prose. | Convert abstract nouns back into clear verbs and actors (`phát triển ...`, `khi họ thực hiện ...`). |
+| Stiff relative-clause chains (`mà`, `cái mà`, `người mà`, `nơi mà`) | Chaining multiple `mà` clauses mirrors English `which/who/where` syntax awkwardly. | Split long sentences into natural sequential clauses or omit redundant `mà` connectors. |
+| Redundant possessives (`của tôi`, `của anh ấy`, `của cô ấy`) | Translating every `his/her/my` (`anh ta đặt tay của anh ta lên vai của cô ta`) bloats dialogue and action. | Drop `của` when ownership is obvious from context (`anh đặt tay lên vai cô`). |
+| Calqued copulas and tense markers (`là một`, `đã và đang`, `ở trong`) | Mechanical `đã và đang` or `là một người đàn ông cao lớn` reads like machine translation. | Use natural aspect markers (`vẫn đang`, `từng`) or drop redundant `một` before predicative adjectives/nouns (`anh cao lớn`). |
 
 ---
 
 ## 5. Vietnamese Book Typography and Dialogue Conventions
 
-Record the chosen option in `style-sheet.md` and enforce it uniformly across all chunks:
+Record the chosen option in `style-sheet.md` and enforce it uniformly across all chunks (checked deterministically by `book_ops.py verify`):
 
-1. **Dialogue Punctuation** (pick ONE convention per project, never mix):
+1. **Dialogue Punctuation** (pick ONE convention per project, never mix across chunks):
    - *Traditional Vietnamese Book Style*: leading em-dash (`—`) at the start of each spoken turn on a new line; reporting tags separated by em-dash or comma.
-   - *Modern Quoted Style*: curly double quotes (`"..."`) for spoken dialogue and single quotes (`'...'`) for nested quotes.
+   - *Modern Quoted Style*: curly double quotes (`“...”`) for spoken dialogue and single quotes (`‘...’`) for nested quotes.
 2. **Numbers and Decimals**:
    - Standard Vietnamese prose/tables use dot `.` as thousands separator (`1.250.000`) and comma `,` as decimal separator (`3,14`), unless `Translation_Brief` preserves source technical/financial notation.
    - Never alter numbers inside code identifiers, URLs, semantic versions (`1.0.0`), or formal citations.
 3. **Dates**:
-   - Use `dd/mm/yyyy` for numeric dates and `ngay D thang M nam YYYY` in narrative prose unless the source is an ISO technical specification.
+   - Use `dd/mm/yyyy` for numeric dates and `ngày D tháng M năm YYYY` in narrative prose unless the source is an ISO technical specification.
 4. **Structural Headings**:
-   - Use consistent Vietnamese structural labels matching `memory/glossary-vi.csv` (`Loi mo dau`, `Chuong 1`, `Loi ket`, `Phu luc`, `Muc luc`, `Chu thich cuoi trang`).
+   - Use consistent Vietnamese structural labels matching `memory/glossary-vi.csv` (`Lời mở đầu`, `Chương 1`, `Lời kết`, `Phụ lục`, `Mục lục`, `Chú thích cuối trang`).
 5. **Code, URLs, and Formal Anchors**:
    - Preserve URLs, markdown anchors, table alignments, and code blocks verbatim.
 

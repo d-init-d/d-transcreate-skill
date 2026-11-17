@@ -123,6 +123,18 @@ The Translation_Agent populates this artifact by researching target-language sty
 
 ### Notes
 <!-- Rationale for forbidden-pattern decisions -->
+
+---
+
+## Golden Voice Calibration Sample
+
+<!-- Optional for short tasks; recommended for books and multi-worker runs.
+     A 300-500 word anchor passage combining narration and dialogue that locks
+     target rhythm, pronoun voice, and register before Phase 5 dispatch. -->
+
+### Source Excerpt (300-500 words)
+
+### Approved Target Voice Anchor
 ```
 
 ---
@@ -150,6 +162,7 @@ The Translation_Agent populates this artifact by researching target-language sty
 | Adaptation Rules | Repetition | When to preserve vs. vary repeated elements |
 | Adaptation Rules | Songs/poems/quoted material | Strategy for verse and quoted passages |
 | Forbidden Patterns | (table) | Patterns explicitly prohibited in target output |
+| Golden Voice Calibration Sample | Anchor excerpt | 300-500 word vetted sample locking prose rhythm and dialogue before parallel chunk dispatch |
 
 ---
 

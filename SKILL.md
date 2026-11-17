@@ -17,7 +17,7 @@ Read `core/d-transcreate.md` first for the canonical eight-phase workflow: Intak
 
 - Use this root workflow directly in any agent runtime; no host adapter is required.
 - Use `adapters/` only when the host platform supports a native skill or agent format and you want auto-discovery (including `adapters/antigravity/` for Antigravity).
-- **Zero-Config Book Mode**: use `scripts/book_ops.py` (`init`, `convert`, `scan`, `sync-glossary`, `verify`, `merge`) for `.pdf` -> `.txt`/`.epub` conversion, deterministic multi-chapter initialization, semantic boundary scanning, shared glossary sync, anti-omission/anti-truncation verification, and final `.txt` / `.epub` / `.md` book merge (including Layout-Preserving EPUB Mode: `.epub` input -> `.epub` output keeps all CSS, fonts, images, cover art, and XHTML DOM wrappers/classes intact while replacing only translated text and TOC titles).
+- **Zero-Config Book Mode**: use `scripts/book_ops.py` (`init`, `convert`, `scan`, `mine-terms`, `bundle-chunk`, `sync-glossary`, `verify`, `merge`) for `.pdf` -> `.txt`/`.epub` conversion (with dynamic header/footnote extraction), deterministic multi-chapter scanning, whole-book entity mining (`candidate-terms.json`), scoped worker packet building, domain-filtered shared glossary sync, deep anti-omission/formal-data/CJK-leakage/locale verification, and Anchor-Locked Layout-Preserving EPUB assembly (retaining CSS, fonts, images, cover art, inline footnote links, and XHTML DOM containers even across paragraph splits).
 - **Modular Phase 3 Research**: run `core/workflows/d-research-module.md` to produce `Research_Dossier` (`research-dossier.md`) via Track A (prior-translation term harvesting) or Track B (authorial intent and transcreation mindset compass), seeding from persistent memory (`memory/glossary-vi.csv`) and locale profiles (`core/locales/vi-VN.md`).
 - If the runtime supports subagents (native swarm, spawner, or host agents), dispatch roles via the `Subagent_Dispatch_Plan`, start every worker prompt with the Worker Contract Card from `core/workflows/subagents.md`, sync new terms via `glossary-inbox.jsonl`, and enforce Peer Cross-Check before marking any chunk `done`.
 - If subagents are unavailable, the main agent runs the same role contract sequentially. Artifacts remain mandatory in both modes so work can resume and be audited.
@@ -56,5 +56,5 @@ Seven roles drive the workflow; workers propose and a single coordinator approve
 - `core/schemas/` — artifact contracts (including `core/schemas/research-dossier.md`)
 - `core/prompts/` — role prompts
 - `memory/glossary-vi.csv` — persistent cross-book Vietnamese translation memory
-- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `convert`, `scan`, `sync-glossary`, `verify`, `merge`) with `.pdf` -> `.txt`/`.epub` conversion
+- `scripts/book_ops.py` — deterministic book pipeline CLI (`init`, `convert`, `scan`, `mine-terms`, `bundle-chunk`, `sync-glossary`, `verify`, `merge`) with `.pdf`/`.epub` conversion and Anchor-Locked EPUB rebuild
 - `templates/` — blank artifact templates to copy and fill

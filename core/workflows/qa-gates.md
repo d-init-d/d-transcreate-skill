@@ -31,10 +31,10 @@ Check:
 **Method:** Compare the Source_Map structure against the output structure, and run deterministic verification:
 
 ```bash
-python3 scripts/book_ops.py verify --workspace <dir>
+python3 scripts/book_ops.py verify --workspace <dir> [--require-dossier --enforce-glossary]
 ```
 
-`book_ops.py verify` enforces 100% chunk coverage between `.book-scan-meta.json` and `chunk-manifest.csv`, requires every row to be `done` with a non-empty output file, verifies target/source length parity (`--min-word-ratio`, `--min-char-ratio`), paragraph parity, and heading parity, and rejects placeholder markers (such as `[omitted]`, `[truncated]`, or unresolved task markers) and unclosed fenced code blocks. Every entry in the Source_Map must have a corresponding translated element.
+`book_ops.py verify` enforces 100% chunk coverage between `.book-scan-meta.json` and `chunk-manifest.csv`, requires every row to be `done` with a non-empty output file, verifies language-pair-calibrated target/source length parity (`--min-word-ratio`, `--max-word-ratio`, `--min-char-ratio`), paragraph parity, and heading parity, checks `Research_Dossier` readiness under `--require-dossier`, verifies URL and numeric formal-data parity, flags untranslated CJK script leakage in non-CJK target prose, checks Vietnamese dialogue/anti-translatorese consistency (`core/locales/vi-VN.md`), and rejects placeholder markers (such as `[omitted]`, `[truncated]`, or unresolved task markers) and unclosed fenced code blocks. Every entry in the Source_Map must have a corresponding translated element.
 
 ---
 
@@ -73,7 +73,7 @@ Check:
 
 **Fiction-specific:** Check terms of address, titles, pronouns, nicknames, and relationship markers against the Story_Bible and the `Research_Dossier` Pronoun and Address Matrix.
 
-**Deterministic check:** `python3 scripts/book_ops.py verify --workspace <dir>` scans every translated chunk against `glossary.csv`, failing with an error whenever any `forbidden_translation` appears and flagging missing `preferred_translation` renderings for approved source terms present in the chunk (escalated to errors under `--strict`).
+**Deterministic check:** `python3 scripts/book_ops.py verify --workspace <dir> [--enforce-glossary]` scans every translated chunk against `glossary.csv`, failing with an error whenever any `forbidden_translation` appears, warning on retroactive cross-chunk glossary drift, and flagging missing `preferred_translation` renderings for approved source terms present in the chunk (escalated to errors under `--enforce-glossary` or `--strict`).
 
 ---
 

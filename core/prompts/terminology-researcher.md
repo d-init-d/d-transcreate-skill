@@ -11,7 +11,7 @@ You do NOT hold authority over the global Glossary, Research_Dossier, or Unresol
 - Translation_Brief excerpt (source language, target language, target locale, audience, terminology authority, research depth, do-not-translate list)
 - Source_Map excerpt (structure, hazards, domain or genre classification)
 - Research_Dossier current state or draft (`research-dossier.md`, including `Work Classification` and `prior_translation_status` if already initialized)
-- Term list or source text segment to research (assigned by coordinator)
+- Term list, `<workspace>/candidate-terms.json` (auto-mined by `book_ops.py scan` / `mine-terms`), or source text segment to research (assigned by coordinator)
 - Existing Glossary rows relevant to the assigned terms, including entries pre-seeded from Global Translation Memory (`memory/glossary-<target_lang>.csv` via `scripts/book_ops.py sync-glossary --seed`)
 - Unresolved_Issues_Log entries related to terminology
 - Story_Bible or Domain_Map excerpt (when relevant to term context)

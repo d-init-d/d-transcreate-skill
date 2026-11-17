@@ -4,6 +4,33 @@ All notable changes to this skill pack are documented here.
 
 This project follows semantic versioning.
 
+## 1.1.0 — 2026-11-17
+
+Reliability, intelligence, and QA depth release: eliminates EPUB DOM layout drift on paragraph splits, upgrades PDF header/footnote extraction, adds whole-book entity mining and zero-overhead worker packet bundling, guards cross-book translation memory against domain pollution, and authenticates the Vietnamese publishing profile.
+
+### Added
+
+- **Anchor-Locked EPUB DOM & Inline Asset Engine** (`scripts/book_ops.py`): `scan` now tags EPUB leaf blocks with `<!-- @bN -->` block anchors while preserving inline footnotes/cross-references (`<a href>` + `<sup>`) and mid-block images as Markdown inline links and image spans. During `merge`, translated blocks lock deterministically to their original XHTML containers—preventing Vietnamese dialogue splits (`—`) or paragraph merges from shifting downstream CSS classes, headings, or `<td>`/`<th>` table cells—while cloning unique attributes without duplicate XML `id`s.
+- **Whole-Book Term & Entity Mining (`book_ops.py mine-terms`)**: Automatically executed during `scan` (and runnable standalone) across all `source_chunks/*.md` to surface recurring proper nouns, capitalized phrases, acronyms, CJK bracketed names, and italicized terms across the entire book into `candidate-terms.json` and `source-map.md`.
+- **Scoped Worker Packet Bundler (`book_ops.py bundle-chunk`)**: Generates self-contained per-chunk prompt packets under `packets/<chunk_id>-<role>.md` pre-loaded with the `WORKER CONTRACT CARD`, filtered `glossary.csv` + `glossary-inbox.jsonl` slices, filtered `Story_Bible` / `Domain_Map` rows, adjacent `Chunk_Summary` entries, and `Style_Sheet`.
+- **Golden Voice Calibration Sample** (`templates/style-sheet.md`, `core/schemas/style-sheet.md`): Locks a vetted 300–500 word anchor sample in `style-sheet.md` before parallel Phase 5 dispatch.
+- **Bidirectional 37-Column `d-research` v3.3 Ledger Bridge & Domain-Safe Memory Controls** (`scripts/book_ops.py`, `memory/README.md`): Initializes and synchronizes `evidence-ledger.jsonl` alongside 37-column `evidence-ledger.csv`; adds `--domain`, `--filter-to-source`, `--approve-clean`, and automatic proper-noun `--promote` guards (`--include-proper-nouns` override).
+- **Deep Deterministic QA Checks & Validator Check C24** (`scripts/book_ops.py verify`, `scripts/validate_pack.py`): Adds `--require-dossier`, `--enforce-glossary`, language-pair-calibrated word-ratio defaults, URL/number formal-data parity checks, untranslated CJK script-leakage detection, Vietnamese dialogue/calque linting (`locale-vi`), retroactive cross-chunk glossary drift warnings, and `check_c24_locale_profiles`.
+- **Six new end-to-end integration tests** in `tests/test_pack.py` (39 tests total).
+
+### Changed
+
+- **Sliding-Window Phase 6 Voice Pass** (`core/d-transcreate.md`, `core/workflows/long-document.md`, `core/prompts/transcreate-coordinator.md`): Replaced single-turn monolithic post-merge regeneration on large books with a centralized Sliding-Window Voice & Seam Pass directly on `output/<chunk_id>.md` before final `verify` and `merge`, preventing output truncation and keeping `.txt`, `.md`, and `.epub` synchronized.
+- **PDF Ingestion Engine** (`scripts/book_ops.py`): Added normalized digit-masked detection for alternating recto/verso and per-chapter running headers/footers plus page-bottom footnote detachment so cross-page sentences reflow cleanly.
+- **Authentic Accented Vietnamese Locale Profile** (`core/locales/vi-VN.md`, `scripts/validate_pack.py`): Restored full Vietnamese diacritics and concrete before/after anti-translatorese remedies; exempted `core/locales/` from C8 non-ASCII warnings while enforcing UTF-8 authenticity via C24.
+- Updated `VERSION`, `pyproject.toml`, `core/`, `schemas/`, `templates/`, `adapters/`, and `examples/` to `1.1.0`.
+
+### Fixed
+
+- Fixed positional XHTML DOM drift when translators split one EPUB paragraph into multiple dialogue lines or merge paragraphs before subheadings.
+- Fixed loss of inline `<a epub:type="noteref"><sup>...</sup></a>` footnote references and table cell deletion during EPUB DOM reconstruction.
+- Fixed `pyproject.toml` lagging at `0.5.0` and out-of-domain fantasy/technical term cross-pollution in Tier-1 memory seeding/promotion.
+
 ## 1.0.0 — 2026-11-13
 
 Production release: book-scale automation, layout-preserving EPUB rebuild, modular pre-translation research, and persistent cross-book translation memory.

@@ -11,8 +11,8 @@ You do NOT hold authority over the global Glossary or Style_Sheet. You do not tr
 - Translation_Brief excerpt (source language, target language, target locale, audience, translation mode, register, output format, formatting constraints, do-not-translate list, quality bar)
 - Research_Dossier excerpt (`research-dossier.md` — Transcreation Mindset & Voice Compass, Pronoun & Address Matrix, Track A/B term & pitfall notes)
 - Target locale profile excerpt (e.g., `core/locales/vi-VN.md` when `target_language` is Vietnamese)
-- Synced Glossary slice (approved and proposed entries from `<workspace>/glossary.csv` plus recent wave locks from `<workspace>/glossary-inbox.jsonl` relevant to this chunk)
-- Style_Sheet rules (only rules applicable to this chunk's content type and register)
+- Synced Glossary slice (approved and proposed entries from `<workspace>/glossary.csv` plus recent wave locks from `<workspace>/glossary-inbox.jsonl` relevant to this chunk — pre-built via `scripts/book_ops.py bundle-chunk` when available)
+- Style_Sheet rules (rules applicable to this chunk's content type and register, plus the **Golden Voice Calibration Sample**)
 - Story_Bible excerpt (characters, places, timeline entries, continuity threads relevant to this chunk) — when source is fiction-class
 - Domain_Map excerpt (concepts, acronyms, units, standards relevant to this chunk) — when source is technical/legal/medical class
 - Previous Chunk_Summary (for continuity with the preceding chunk)
@@ -78,7 +78,7 @@ Return a structured response containing ALL of the following fields:
 
 4. **Apply Style_Sheet rules.** Follow all applicable Style_Sheet rules for register, rhythm, dialogue punctuation, terms of address, adaptation conventions, and formatting.
 
-5. **Preserve structure.** Keep paragraph order unless the output format explicitly allows adaptation. Preserve all meaning-bearing details.
+5. **Preserve structure and EPUB anchors.** Keep paragraph order unless the output format explicitly allows adaptation. Preserve all meaning-bearing details, and keep any `<!-- @bN -->` block anchor lines and inline Markdown footnote/cross-ref links intact (when splitting a `<!-- @bN -->` paragraph into multiple spoken dialogue lines, keep all resulting paragraphs directly under that same `<!-- @bN -->` anchor).
 
 6. **Mark uncertainties.** When a term is ambiguous and no Glossary entry resolves it, do NOT guess. Use the best available translation, mark it as uncertain in the output, and record it for the `uncertain_items` return field.
 

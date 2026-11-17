@@ -42,10 +42,10 @@ Produce a **Translation_Brief** artifact before any chunk translation begins. Th
 When a user drops a book or manuscript and specifies only the source path and target language, do not block on manual scaffolding. Run the deterministic initializer:
 
 ```bash
-python3 scripts/book_ops.py init --source <path> --target-lang <lang> --workspace <dir>
+python3 scripts/book_ops.py init --source <path> --target-lang <lang> --workspace <dir> [--domain <all|fiction|technical|legal|general>]
 ```
 
-This command creates `<workspace>/`, `output/`, `summaries/`, and `proposals/`, populates `translation-brief.md` with safe defaults (`Skill version: 1.0.0`, mode `"faithful translation with light transcreation for idioms and dialogue"`), initializes empty `glossary-inbox.jsonl`, `evidence-ledger.jsonl`, and `research-coverage.json`, seeds `glossary.csv` from `memory/glossary-<lang>.csv` when available, and links `core/locales/vi-VN.md` in `style-sheet.md` when the target language is Vietnamese.
+This command creates `<workspace>/`, `output/`, `summaries/`, and `proposals/`, populates `translation-brief.md` with safe defaults (`Skill version: 1.1.0`, mode `"faithful translation with light transcreation for idioms and dialogue"`), initializes empty `glossary-inbox.jsonl`, `evidence-ledger.jsonl`, 37-column `evidence-ledger.csv`, and `research-coverage.json`, seeds `glossary.csv` from `memory/glossary-<lang>.csv` (filtered by `--domain` when provided), and links `core/locales/vi-VN.md` in `style-sheet.md` when the target language is Vietnamese.
 
 ---
 
@@ -71,9 +71,9 @@ For `.pdf`, `.epub`, `.md`, `.txt`, `.html`/`.htm` files, or directories of sour
 python3 scripts/book_ops.py scan --source <path> --workspace <dir> --max-words 1500
 ```
 
-When the input includes a `.pdf` book, `scan` automatically extracts chapters (stripping running headers/footers and page numbers, reflowing hard-wrapped paragraphs), saves clean `<workspace>/converted_source/<stem>.txt` and `<workspace>/converted_source/<stem>.epub` working copies, and records both converted paths in `.book-scan-meta.json` and `source-map.md`. You can also run standalone conversion via `python3 scripts/book_ops.py convert --source <book.pdf> --out <book.epub> --also-out <book.txt>`.
+When the input includes a `.pdf` book, `scan` automatically extracts chapters (stripping both static and alternating/numbered running headers/footers, page numbers, and detached page-bottom footnotes, then reflowing hard-wrapped paragraphs), saves clean `<workspace>/converted_source/<stem>.txt` and `<workspace>/converted_source/<stem>.epub` working copies, and records both converted paths in `.book-scan-meta.json` and `source-map.md`. You can also run standalone conversion via `python3 scripts/book_ops.py convert --source <book.pdf> --out <book.epub> --also-out <book.txt>`.
 
-`scan` sorts directory files naturally, detects chapter/section or EPUB spine boundaries, splits oversized units cleanly at paragraph boundaries (`\n\n`) without mid-paragraph breaks, materializes exact per-chunk source files under `<workspace>/source_chunks/<chunk_id>.md`, populates `source-map.md` and `chunk-manifest.csv` (`status=ready`), and records baseline chunk metrics (`source_words`, `source_chars`, `source_paragraphs`, `source_headings`, `source_tables`) in `<workspace>/.book-scan-meta.json`. When the source is a single `.epub` file, `scan` also archives `<workspace>/.source-template.epub` and maps each chunk to its exact DOM leaf-block range (`epub_href`, `epub_block_start`, `epub_block_end`) so `merge` can preserve original EPUB layout and styling verbatim.
+`scan` sorts directory files naturally, detects chapter/section or EPUB spine boundaries, splits oversized units cleanly at paragraph boundaries (`\n\n`) without mid-paragraph breaks, materializes exact per-chunk source files under `<workspace>/source_chunks/<chunk_id>.md`, runs whole-book entity/term mining (`candidate-terms.json`, also runnable via `mine-terms`), populates `source-map.md` and `chunk-manifest.csv` (`status=ready`), and records baseline chunk metrics (`source_words`, `source_chars`, `source_paragraphs`, `source_headings`, `source_tables`) in `<workspace>/.book-scan-meta.json`. When the source is a single `.epub` file, `scan` also archives `<workspace>/.source-template.epub`, tags each XHTML leaf block with an anchor comment (`<!-- @bN -->`) while preserving inline footnote/cross-ref links and mid-block images as Markdown inline links, and maps each chunk to its exact DOM block range (`epub_href`, `epub_block_start`, `epub_block_end`) so `merge` restores original EPUB design verbatim even when paragraphs are split or merged during translation.
 
 ### Source Map Contents
 
@@ -132,17 +132,18 @@ Schema: `core/schemas/source-map.md`.
 
 Research runs after the Source_Map exists and before chunk boundaries are finalized. Activate `core/workflows/d-research-module.md` to build the **Research_Dossier** (`core/schemas/research-dossier.md`) before chunk translation starts, combining:
 
-- **Tier-1 Shared Memory Seeding**: Run `python3 scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang <lang>` (if not already seeded by `init`) to import approved cross-book terms from `memory/glossary-<lang>.csv`, and load the target locale profile (such as `core/locales/vi-VN.md`).
+- **Tier-1 Shared Memory Seeding**: Run `python3 scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang <lang> --domain <domain> --filter-to-source` (if not already seeded by `init`) to import domain-relevant approved cross-book terms present in the source corpus from `memory/glossary-<lang>.csv`, and load the target locale profile (such as `core/locales/vi-VN.md`).
+- **Whole-Book Term Recall**: Feed `<workspace>/candidate-terms.json` (generated by `scan` / `mine-terms`) to terminology researchers so recurring entities appearing in middle or late chapters are researched upfront.
 - **Track A (Prior-Translation Harvesting)**: When existing translations exist, harvest canonical character names, toponyms, titles, worldbuilding/domain terms, and pronoun pairings, and log known mistranslations in `forbidden_translation` (paraphrased/attributed evidence only; never copy extended prose).
-- **Track B (Authorial Intent and Transcreation Mindset)**: When no target translation exists (or for fresh adaptation), establish the historical/cultural context, authorial intent, 4-rung register ladder, and target-language transcreation mindset compass.
+- **Track B (Authorial Intent and Transcreation Mindset)**: When no target translation exists (or for fresh adaptation), establish the historical/cultural context, authorial intent, 4-rung register ladder, target-language transcreation mindset compass, and a **Golden Voice Calibration Sample** (300–500 words) anchored in `style-sheet.md`.
 
 The full procedure — candidate term mining, term classification, source priority order, `d-research` integration, copyright rules, and the research stop rule — is defined in `core/workflows/terminology-research.md`.
 
 Phase outputs:
 
-- **Research_Dossier** (`research-dossier.md`) plus telemetry in `evidence-ledger.jsonl` and `research-coverage.json`.
+- **Research_Dossier** (`research-dossier.md`) plus synchronized telemetry in `evidence-ledger.csv` (37-column `d-research` v3.3) / `evidence-ledger.jsonl` and `research-coverage.json`.
 - **Glossary** containing at minimum the seeded and proposed core terms, each with evidence and confidence (schema: `core/schemas/glossary.md`).
-- **Initial Style_Sheet** covering register, dialogue conventions, terms of address, and adaptation rules discovered so far (schema: `core/schemas/style-sheet.md`).
+- **Initial Style_Sheet** covering register, dialogue conventions, terms of address, adaptation rules, and the Golden Voice Calibration Sample (schema: `core/schemas/style-sheet.md`).
 - High-impact unresolved terms recorded in the Unresolved_Issues_Log by the Coordinator.
 
 If the platform supports subagents, the terminology-researcher and style-researcher roles may be dispatched in this phase under the **research-tier gate** (see `core/workflows/subagents.md`): Translation_Brief and Source_Map exist on disk, and the research units are recorded in a Subagent_Dispatch_Plan. Translation and review roles are never dispatched this early.
@@ -227,11 +228,11 @@ Do NOT dispatch any chunk-translator or reviewer before the **full readiness gat
 
 Dispatch rules:
 
-- Paste the **Worker Contract Card** (`core/workflows/subagents.md`) at the top of every worker prompt — it re-anchors the binding rules at every dispatch.
+- Generate a scoped worker packet with `python3 scripts/book_ops.py bundle-chunk --workspace <dir> --chunk <chunk_id> --role <role>` (or paste the **Worker Contract Card** at the top of every worker prompt) so workers receive exact Glossary/Story_Bible slices without manual token overhead.
 - Assign each Worker_Subagent a disjoint scope from the role set: terminology research, style research, chunk translation, continuity review, fidelity review, or formatting review.
-- Provide each worker only the relevant artifact slices and chunk text, not the full document.
+- Preserve `<!-- @bN -->` anchor lines and inline Markdown footnote/cross-ref links whenever translating `.epub` chunks.
 - Never allow two workers to edit the same output file in parallel.
-- Between parallel waves, synchronize newly discovered recurring terms posted to `<workspace>/glossary-inbox.jsonl` by running `python3 scripts/book_ops.py sync-glossary --workspace <dir>`, resolving any reported conflicts before dispatching the next wave.
+- Between parallel waves, synchronize newly discovered recurring terms posted to `<workspace>/glossary-inbox.jsonl` by running `python3 scripts/book_ops.py sync-glossary --workspace <dir> [--approve-clean]`, resolving any reported conflicts before dispatching the next wave.
 - Enforce **Mandatory Peer Cross-Check**: no chunk transitions from `drafted` to `done` by the translator alone; `fidelity-reviewer` and `continuity-reviewer` cross-check completeness, boundary handshakes, pronoun/address consistency, and shared glossary adherence first.
 - The Coordinator retains final authority over Glossary changes, Style_Sheet decisions, voice consistency, and continuity across chunks. Workers return proposals; only the Coordinator writes shared artifacts.
 
@@ -297,22 +298,12 @@ If a term in the chunk is ambiguous and no glossary entry resolves it, mark the 
 
 After all assigned chunks have status `done` in the Chunk_Manifest:
 
-### Merge Steps
+### Merge and Voice-Pass Steps
 
-1. **Deterministic verified assembly.** Run `python3 scripts/book_ops.py merge --workspace <dir> --out <output_path>` (supporting `.txt`, `.epub`, `.md`, or `--format both` to produce both clean `.txt` and valid `.epub`) to verify completeness and assemble all chunk outputs in exact `chunk-manifest.csv` order with a generated Table of Contents and Completeness Audit in `qa-report.md`. When the workspace was scanned from an `.epub` template (`.source-template.epub`), `.epub` output automatically uses Layout-Preserving EPUB Mode: all CSS stylesheets, fonts, images, cover art, OPF manifest/spine structure, and XHTML container tags/classes stay untouched while only translatable text blocks, `<title>`, `toc.ncx`/`nav.xhtml` chapter labels, and `<dc:language>` (plus `<dc:title>` if `--title` is supplied) are localized.
-2. **Cross-chunk consistency checks.** Verify terminology, headings, table labels, captions, footnotes, references, and punctuation are consistent across chunk boundaries.
-3. **Resolve glossary conflicts.** If the merge step detects conflicting Glossary applications across chunks, resolve them against the approved Glossary entries before producing the final output.
-4. **Normalize formatting.** Headings, table labels, captions, footnotes, references, and punctuation must follow a single convention throughout.
-5. **Read across boundaries.** Check transitions between chunks for flow and continuity.
-
-### Final Voice Pass
-
-Run a single final voice pass over the merged output **centrally** — not as independent chunk work. This pass:
-
-- Smooths transitions between chunks
-- Ensures consistent register and voice throughout
-- Catches any remaining inconsistencies that only appear at document scale
-- Does NOT change meaning or terminology decisions already approved
+1. **Cross-chunk consistency checks.** Verify terminology, headings, table labels, captions, footnotes, references, and punctuation are consistent across chunk boundaries (`output/<chunk_id>.md`).
+2. **Resolve glossary conflicts.** If conflicting Glossary applications exist across chunks, update the affected `output/<chunk_id>.md` files against the approved Glossary entries before merging.
+3. **Centralized Sliding-Window Voice & Seam Pass.** Run a single centralized voice pass over consecutive seam windows (2–3 adjacent chunks or chapters at a time), updating `output/<chunk_id>.md` directly in source order. This avoids single-turn output truncation on long books and keeps `.txt`, `.md`, and `.epub` deliverables 100% synchronized. Never delegate this pass and never change meaning or approved terminology decisions.
+4. **Deterministic verified assembly.** Run `python3 scripts/book_ops.py merge --workspace <dir> --out <output_path>` (supporting `.txt`, `.epub`, `.md`, or `--format both` to produce both clean `.txt` and valid `.epub`; add `--require-dossier --enforce-glossary` for publication runs) to run `verify` and assemble all chunk outputs in exact `chunk-manifest.csv` order with a generated Table of Contents and Completeness Audit in `qa-report.md`. When the workspace was scanned from an `.epub` template (`.source-template.epub`), `.epub` output runs Anchor-Locked Layout-Preserving EPUB Mode: `<!-- @bN -->` anchors lock blocks to original XHTML containers (preventing paragraph splits/merges from shifting CSS classes or headings), inline `<a href>`/`<sup>`/`<img>` tags stay intact, and CSS, fonts, images, cover art, OPF manifest/spine structure, and localized TOC entries remain preserved.
 
 ### Post-Merge State Update
 
@@ -323,7 +314,7 @@ Run a single final voice pass over the merged output **centrally** — not as in
 
 ## Phase 7: QA Gates
 
-After the merge and final voice pass, run `python3 scripts/book_ops.py verify --workspace <dir>` (which checks 100% manifest completeness, length/paragraph/heading parity, placeholder markers such as `[omitted]`, `[truncated]`, or unresolved task markers, unclosed code fences, and glossary compliance) alongside the eight mandatory QA gates defined in `core/workflows/qa-gates.md`: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting.
+After the merge and final voice pass, run `python3 scripts/book_ops.py verify --workspace <dir> [--require-dossier --enforce-glossary]` (which checks 100% manifest completeness, language-pair-calibrated length/paragraph/heading parity, placeholder/unclosed-fence safety, `Research_Dossier` readiness, URL/number formal-data parity, untranslated CJK script-leakage detection, Vietnamese dialogue/calque consistency, and glossary compliance) alongside the eight mandatory QA gates defined in `core/workflows/qa-gates.md`: completeness, fidelity, terminology, target-language quality, continuity, numbers/formal-data, formatting, and residual-risk reporting.
 
 - Every gate must pass or produce documented residual risks before delivery.
 - Gates may also run incrementally after each major batch of chunks reaches `done`.
@@ -333,7 +324,7 @@ After the merge and final voice pass, run `python3 scripts/book_ops.py verify --
 
 ## Phase 8: Delivery
 
-After all Phase 7 gates pass, promote durable high-confidence project terms (`status=approved`, `confidence=high`) back to Tier-1 shared memory:
+After all Phase 7 gates pass, promote durable high-confidence reusable project terms (`status=approved`, `confidence=high`; story-specific proper nouns and `[no-promote]` items are automatically guarded unless `--include-proper-nouns` is set) back to Tier-1 shared memory:
 
 ```bash
 python3 scripts/book_ops.py sync-glossary --workspace <dir> --promote --target-lang <lang>

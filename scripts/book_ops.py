@@ -2,18 +2,27 @@
 """
 book_ops.py — Deterministic book pipeline CLI for d-transcreate.
 
-Provides six deterministic subcommands using Python 3.8+ standard library (with
+Provides eight deterministic subcommands using Python 3.8+ standard library (with
 optional PyMuPDF/pdfplumber/pdfminer/pypdf acceleration for complex PDFs):
-  - init:          Initialize a workspace with templates, brief defaults, and memory seeding.
+  - init:          Initialize a workspace with templates, domain-aware memory seeding,
+                   and dual evidence ledger files.
   - convert:       Convert a PDF (or .md/.txt/.html/.epub) into clean .epub and/or plain .txt.
   - scan:          Ingest a file or directory (.pdf, .epub, .md, .txt, .html), auto-convert PDF
-                   inputs to .txt + .epub, split at chapter/paragraph boundaries, and materialize chunks.
-  - sync-glossary: Seed from Tier-1 shared memory, merge worker glossary-inbox.jsonl
-                   proposals with conflict detection, and promote high-confidence terms.
-  - verify:        Enforce 100% manifest completeness, length/paragraph/heading parity,
-                   anti-truncation/placeholder checks, and glossary compliance.
+                   inputs, split at chapter/paragraph boundaries, materialize anchor-locked chunks,
+                   and run whole-book candidate term mining.
+  - mine-terms:    Mine recurring entities, proper nouns, acronyms, and special terms across
+                   all scanned chunks into candidate-terms.json + source-map.md.
+  - bundle-chunk:  Build a scoped worker prompt packet (Contract Card + filtered Glossary/
+                   Story_Bible slices + adjacent summaries + chunk text) for low-token dispatch.
+  - sync-glossary: Seed from Tier-1 memory (--domain, --filter-to-source), merge worker
+                   glossary-inbox.jsonl proposals (--approve-clean), bridge 37-column d-research
+                   evidence ledgers, and promote reusable terms with proper-noun guards.
+  - verify:        Enforce 100% manifest completeness, language-pair parity, dossier readiness,
+                   formal data/URL parity, CJK leakage checks, Vietnamese locale linting,
+                   and glossary compliance.
   - merge:         Run verify (unless --no-verify), assemble the final book as .md, clean .txt,
-                   .epub, or both (.txt + .epub), and record Completeness Audit in qa-report.md.
+                   .epub (with anchor-locked Layout-Preserving EPUB Mode), or both (.txt + .epub),
+                   and record Completeness Audit in qa-report.md.
 """
 
 import argparse
@@ -35,10 +44,50 @@ from collections import Counter
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from urllib.parse import unquote
 
-SKILL_VERSION = "1.0.0"
+SKILL_VERSION = "1.1.0"
+
+D_RESEARCH_LEDGER_37_HEADER = [
+    "claim_id",
+    "claim",
+    "sub_question",
+    "source_title",
+    "source_url",
+    "source_type",
+    "date_published",
+    "date_accessed",
+    "access_method",
+    "evidence",
+    "quote_or_anchor",
+    "contradiction",
+    "confidence",
+    "notes",
+    "archive_url",
+    "content_hash",
+    "snapshot_status",
+    "verifiability",
+    "verifiability_note",
+    "license_spdx",
+    "robots_status",
+    "prov_activity_id",
+    "record_type",
+    "source_access_class",
+    "subject_class",
+    "purpose_category",
+    "policy_tier",
+    "speaker_identity",
+    "speaker_relationship",
+    "content_origin",
+    "lineage_id",
+    "data_sensitivity",
+    "discovery_disposition",
+    "reporting_disposition",
+    "redaction_class",
+    "retention_until",
+    "authorization_scope_hash",
+]
 
 GLOSSARY_HEADER = [
     "term",
@@ -150,7 +199,10 @@ FALLBACK_TEMPLATES: Dict[str, str] = {
         "### Number, Date, and Unit Conventions\n\n### Citation Conventions\n\n"
         "### Footnote and Translator-Note Policy\n\n### Notes\n\n---\n\n"
         "## Adaptation Rules\n\n### Idioms\n\n### Humor and Wordplay\n\n"
-        "### Cultural References\n\n### Notes\n"
+        "### Cultural References\n\n### Notes\n\n---\n\n"
+        "## Golden Voice Calibration Sample\n\n"
+        "### Source Excerpt (300-500 words)\n\n"
+        "### Approved Target Voice Anchor\n"
     ),
     "story-bible.md": (
         "# Story Bible\n\n"
@@ -302,19 +354,29 @@ _CJK_TOKEN_RE = re.compile(
 )
 
 
+_BLOCK_ANCHOR_RE = re.compile(r"^\s*<!--\s*@b(\d+)\s*-->\s*$", re.MULTILINE)
+
+
+def _strip_block_anchors(text: str) -> str:
+    """Remove EPUB DOM block anchor comments (<!-- @bN -->) without altering prose."""
+    cleaned = _BLOCK_ANCHOR_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 def count_words(text: str) -> int:
     """Count whitespace-delimited words, treating each CJK ideograph/kana as one token."""
-    return len(_CJK_TOKEN_RE.findall(text))
+    return len(_CJK_TOKEN_RE.findall(_strip_block_anchors(text)))
 
 
 def count_chars(text: str) -> int:
     """Count trimmed characters."""
-    return len(text.strip())
+    return len(_strip_block_anchors(text).strip())
 
 
 def count_paragraphs(text: str) -> int:
     """Count non-empty blocks separated by blank lines."""
-    stripped = text.strip()
+    stripped = _strip_block_anchors(text).strip()
     if not stripped:
         return 0
     blocks = [b for b in re.split(r"\n\s*\n", stripped) if b.strip()]
@@ -325,7 +387,7 @@ def count_headings(text: str) -> int:
     """Count Markdown ATX headings outside fenced code blocks."""
     count = 0
     in_fence = False
-    for line in text.splitlines():
+    for line in _strip_block_anchors(text).splitlines():
         s = line.strip()
         if s.startswith("```") or s.startswith("~~~"):
             in_fence = not in_fence
@@ -346,7 +408,7 @@ def count_tables(text: str) -> int:
             return 1
         return 0
 
-    for line in text.splitlines():
+    for line in _strip_block_anchors(text).splitlines():
         s = line.strip()
         if s.startswith("```") or s.startswith("~~~"):
             in_fence = not in_fence
@@ -538,11 +600,43 @@ def _find_tag_end(text: str, start: int) -> int:
 
 
 def _strip_xhtml_tags_to_md(inner_html: str, tag_name: str) -> str:
-    """Convert leaf XHTML inner markup into clean Markdown text."""
-    s = re.sub(r"(?i)<br\s*/?>", " ", inner_html)
+    """Convert leaf XHTML inner markup into clean Markdown while retaining links/footnotes/images."""
+    # Strip leading decorative ornament <img> tags (re-attached via _unwrap_full_inline_wrappers)
+    s = re.sub(r"^(?:\s*<img\b[^>]*/?>\s*)+", "", inner_html, flags=re.IGNORECASE)
+    if not s.strip():
+        return ""
+    s = re.sub(r"(?i)<br\s*/?>", " ", s)
+
+    def _replace_anchor(match: re.Match) -> str:
+        attrs, body = match.group(1), match.group(2)
+        m_href = re.search(r'\bhref\s*=\s*(["\'])(.*?)\1', attrs, re.IGNORECASE)
+        label = re.sub(r"(?is)<(em|i)(?:\s[^>]*)?>(.*?)</\1>", r"*\2*", body)
+        label = re.sub(r"(?is)<(strong|b)(?:\s[^>]*)?>(.*?)</\1>", r"**\2**", label)
+        label = re.sub(r"(?is)<code(?:\s[^>]*)?>(.*?)</code>", r"`\1`", label)
+        label = re.sub(r"<[^>]+>", "", label)
+        label = re.sub(r"\s+", " ", html.unescape(label)).strip()
+        if m_href and label:
+            href_val = html.unescape(m_href.group(2)).strip()
+            return f"[{label}]({href_val})"
+        return label
+
+    s = re.sub(r"(?is)<a\b([^>]*)>(.*?)</a>", _replace_anchor, s)
+
+    def _replace_img(match: re.Match) -> str:
+        attrs = match.group(1)
+        m_src = re.search(r'\bsrc\s*=\s*(["\'])(.*?)\1', attrs, re.IGNORECASE)
+        if not m_src:
+            return ""
+        m_alt = re.search(r'\balt\s*=\s*(["\'])(.*?)\1', attrs, re.IGNORECASE)
+        src_val = html.unescape(m_src.group(2)).strip()
+        alt_val = html.unescape(m_alt.group(2)).strip() if m_alt else ""
+        return f"![{alt_val}]({src_val})"
+
+    s = re.sub(r"(?is)<img\b([^>]*)/?>", _replace_img, s)
     s = re.sub(r"(?is)<(em|i)(?:\s[^>]*)?>(.*?)</\1>", r"*\2*", s)
     s = re.sub(r"(?is)<(strong|b)(?:\s[^>]*)?>(.*?)</\1>", r"**\2**", s)
     s = re.sub(r"(?is)<code(?:\s[^>]*)?>(.*?)</code>", r"`\1`", s)
+    s = re.sub(r"(?is)<sup(?:\s[^>]*)?>(.*?)</sup>", lambda m: f"^{{{m.group(1).strip()}}}" if m.group(1).strip() else "", s)
     s = re.sub(r"<[^>]+>", "", s)
     s = html.unescape(s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -666,7 +760,7 @@ def _split_epub_blocks_by_max_words(
     blocks: Sequence[Dict[str, Any]],
     max_words: int,
 ) -> List[Tuple[int, int, str]]:
-    """Group XHTML leaf blocks into chunks respecting max_words without splitting blocks."""
+    """Group XHTML leaf blocks into anchor-locked chunks respecting max_words."""
     if not blocks:
         return []
     groups: List[Tuple[int, int, str]] = []
@@ -675,14 +769,15 @@ def _split_epub_blocks_by_max_words(
     buf_words = 0
 
     for idx, blk in enumerate(blocks):
+        anchored = f"<!-- @b{idx} -->\n{blk['md']}"
         w = count_words(blk["md"])
         if buf and buf_words + w > max_words:
             groups.append((start_idx, idx, "\n\n".join(buf)))
             start_idx = idx
-            buf = [blk["md"]]
+            buf = [anchored]
             buf_words = w
         else:
-            buf.append(blk["md"])
+            buf.append(anchored)
             buf_words += w
 
     if buf:
@@ -859,11 +954,84 @@ def _unwrap_full_inline_wrappers(inner_html: str) -> Tuple[str, str, List[Tuple[
 
 def _render_dom_inner_html(orig_inner: str, translated_plain_or_md: str) -> str:
     """Render translated inline content inside preserved leading ornament & inline wrappers."""
-    leading, _core, wrappers = _unwrap_full_inline_wrappers(orig_inner)
-    rendered = _inline_md_to_xhtml(translated_plain_or_md)
+    leading, core_orig, wrappers = _unwrap_full_inline_wrappers(orig_inner)
+    rendered = _inline_md_to_xhtml(translated_plain_or_md, orig_inner=core_orig)
     for wtag, wattrs in reversed(wrappers):
         rendered = f"<{wtag}{wattrs}>{rendered}</{wtag}>"
     return f"{leading}{rendered}"
+
+
+def _parse_anchored_md_segments(md_text: str) -> Tuple[bool, List[Tuple[Optional[int], List[Dict[str, Any]]]]]:
+    """Parse <!-- @bN --> anchored Markdown into ordered (block_idx, items) pairs."""
+    if not _BLOCK_ANCHOR_RE.search(md_text):
+        return False, [(None, _parse_md_blocks_for_dom(md_text))]
+
+    segments: List[Tuple[Optional[int], List[str]]] = []
+    current_idx: Optional[int] = None
+    buf: List[str] = []
+
+    for line in md_text.splitlines():
+        m = re.match(r"^\s*<!--\s*@b(\d+)\s*-->\s*$", line)
+        if m:
+            if current_idx is not None or any(ln.strip() for ln in buf):
+                segments.append((current_idx, buf))
+            current_idx = int(m.group(1))
+            buf = []
+        else:
+            buf.append(line)
+
+    if current_idx is not None or any(ln.strip() for ln in buf):
+        segments.append((current_idx, buf))
+
+    parsed_segments: List[Tuple[Optional[int], List[Dict[str, Any]]]] = []
+    for anchor_idx, lines in segments:
+        parsed_segments.append((anchor_idx, _parse_md_blocks_for_dom("\n".join(lines))))
+    return True, parsed_segments
+
+
+def _clone_block_html(blk: Dict[str, Any], item: Dict[str, Any]) -> str:
+    """Build a sibling XHTML element for split paragraphs while keeping XML IDs unique."""
+    tag = blk["tag"]
+    if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+        open_tag, close_tag = "<p>", "</p>"
+    else:
+        open_tag = (
+            re.sub(r'\s*\bid\s*=\s*(["\']).*?\1', "", blk["open_tag"])
+            if "id=" in blk["open_tag"]
+            else blk["open_tag"]
+        )
+        close_tag = blk["close_tag"]
+    return f"\n{open_tag}{_inline_md_to_xhtml(item['text'])}{close_tag}"
+
+
+def _align_unanchored_span(
+    slot_blocks: Sequence[Dict[str, Any]],
+    t_items: Sequence[Dict[str, Any]],
+    edits: List[Tuple[int, int, str]],
+) -> None:
+    """Align unanchored DOM slots and translated Markdown items in-place safely."""
+    n_slots = len(slot_blocks)
+    n_trans = len(t_items)
+    if n_slots == 0:
+        return
+
+    for idx in range(min(n_slots, n_trans)):
+        blk = slot_blocks[idx]
+        new_inner = _render_dom_inner_html(blk["inner_html"], t_items[idx]["text"])
+        if idx == n_slots - 1 and n_trans > n_slots:
+            extra_html_parts = [_clone_block_html(blk, extra_item) for extra_item in t_items[n_slots:]]
+            edits.append((blk["inner_start"], blk["inner_end"], new_inner))
+            edits.append((blk["outer_end"], blk["outer_end"], "".join(extra_html_parts)))
+        else:
+            edits.append((blk["inner_start"], blk["inner_end"], new_inner))
+
+    if n_trans < n_slots:
+        for idx in range(n_trans, n_slots):
+            blk = slot_blocks[idx]
+            if blk["tag"] in {"td", "th"}:
+                edits.append((blk["inner_start"], blk["inner_end"], ""))
+            else:
+                edits.append((blk["outer_start"], blk["outer_end"], ""))
 
 
 def _inject_translated_blocks_into_xhtml(
@@ -872,7 +1040,8 @@ def _inject_translated_blocks_into_xhtml(
 ) -> Tuple[str, Optional[str]]:
     """
     Apply translated chunks surgically onto the original XHTML spine file while
-    preserving every layout container, class, id, stylesheet link, and image/ornament.
+    preserving every layout container, class, id, stylesheet link, inline anchor, and ornament.
+    Uses <!-- @bN --> block anchors when present to lock blocks against paragraph splits/merges.
     """
     blocks = _find_xhtml_translatable_blocks(raw_xhtml)
     translated_heading: Optional[str] = None
@@ -881,7 +1050,6 @@ def _inject_translated_blocks_into_xhtml(
     if not blocks:
         return raw_xhtml, None
 
-    # Detect fallback full-file chunks without explicit block range
     if len(chunk_entries) == 1 and chunk_entries[0][0] is None:
         normalized_entries = [(0, len(blocks), chunk_entries[0][2])]
     else:
@@ -898,7 +1066,46 @@ def _inject_translated_blocks_into_xhtml(
         slot_blocks = blocks[b_start:b_end]
         if not slot_blocks:
             continue
-        t_items = _parse_md_blocks_for_dom(md_text)
+
+        is_anchored, segments = _parse_anchored_md_segments(md_text)
+        if is_anchored:
+            by_anchor: Dict[int, List[Dict[str, Any]]] = {}
+            for a_idx, seg_items in segments:
+                target_idx = b_start if a_idx is None else a_idx
+                by_anchor.setdefault(target_idx, []).extend(seg_items)
+
+            if translated_heading is None:
+                for _k, seg_items in segments:
+                    for item in seg_items:
+                        if item["kind"] == "heading":
+                            translated_heading = item["text"]
+                            break
+                    if translated_heading is not None:
+                        break
+                if translated_heading is None:
+                    for _k, seg_items in segments:
+                        if seg_items:
+                            translated_heading = _strip_inline_markdown(seg_items[0]["text"])
+                            break
+
+            for global_idx in range(b_start, b_end):
+                blk = blocks[global_idx]
+                items = by_anchor.get(global_idx, [])
+                if not items:
+                    if blk["tag"] in {"td", "th"}:
+                        edits.append((blk["inner_start"], blk["inner_end"], ""))
+                    else:
+                        edits.append((blk["outer_start"], blk["outer_end"], ""))
+                    continue
+
+                new_inner = _render_dom_inner_html(blk["inner_html"], items[0]["text"])
+                edits.append((blk["inner_start"], blk["inner_end"], new_inner))
+                if len(items) > 1:
+                    extra_html_parts = [_clone_block_html(blk, extra_item) for extra_item in items[1:]]
+                    edits.append((blk["outer_end"], blk["outer_end"], "".join(extra_html_parts)))
+            continue
+
+        t_items = segments[0][1] if segments else []
         if not t_items:
             continue
 
@@ -910,30 +1117,27 @@ def _inject_translated_blocks_into_xhtml(
             if translated_heading is None:
                 translated_heading = _strip_inline_markdown(t_items[0]["text"])
 
-        n_slots = len(slot_blocks)
-        n_trans = len(t_items)
+        heading_tags = {"h1", "h2", "h3", "h4", "h5", "h6"}
+        blk_h = [i for i, b in enumerate(slot_blocks) if b["tag"] in heading_tags]
+        t_h = [i for i, it in enumerate(t_items) if it["kind"] == "heading"]
 
-        for idx in range(min(n_slots, n_trans)):
-            blk = slot_blocks[idx]
-            new_inner = _render_dom_inner_html(blk["inner_html"], t_items[idx]["text"])
-            # Append any extra translated paragraphs on the final slot if translator split paragraphs
-            if idx == n_slots - 1 and n_trans > n_slots:
-                extra_html_parts = []
-                for extra_item in t_items[n_slots:]:
-                    extra_open = re.sub(r'\bid\s*=\s*(["\']).*?\1', "", blk["open_tag"]) if "id=" in blk["open_tag"] else blk["open_tag"]
-                    extra_html_parts.append(
-                        f"\n{extra_open}{_inline_md_to_xhtml(extra_item['text'])}{blk['close_tag']}"
-                    )
-                edits.append((blk["inner_start"], blk["inner_end"], new_inner))
-                edits.append((blk["outer_end"], blk["outer_end"], "".join(extra_html_parts)))
-            else:
-                edits.append((blk["inner_start"], blk["inner_end"], new_inner))
-
-        # Remove leftover untranslated surplus paragraph nodes when translator merged paragraphs
-        if n_trans < n_slots:
-            for idx in range(n_trans, n_slots):
-                blk = slot_blocks[idx]
-                edits.append((blk["outer_start"], blk["outer_end"], ""))
+        if blk_h and len(blk_h) == len(t_h):
+            prev_b, prev_t = 0, 0
+            for bh_idx, th_idx in zip(blk_h, t_h):
+                if bh_idx > prev_b or th_idx > prev_t:
+                    _align_unanchored_span(slot_blocks[prev_b:bh_idx], t_items[prev_t:th_idx], edits)
+                h_blk = slot_blocks[bh_idx]
+                edits.append((
+                    h_blk["inner_start"],
+                    h_blk["inner_end"],
+                    _render_dom_inner_html(h_blk["inner_html"], t_items[th_idx]["text"]),
+                ))
+                prev_b = bh_idx + 1
+                prev_t = th_idx + 1
+            if prev_b < len(slot_blocks) or prev_t < len(t_items):
+                _align_unanchored_span(slot_blocks[prev_b:], t_items[prev_t:], edits)
+        else:
+            _align_unanchored_span(slot_blocks, t_items, edits)
 
     out_xhtml = raw_xhtml
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
@@ -1077,35 +1281,142 @@ _PAGE_NUM_RE = re.compile(
     r"^\s*(?:[-–—]\s*\d{1,5}\s*[-–—]|\d{1,5}|(?:page|trang)\s+\d+(?:\s*(?:/|of|trên)\s*\d+)?)\s*$",
     re.IGNORECASE,
 )
+_PDF_EDGE_SEP_NUM_RE = re.compile(r"(?:\|\s*\d{1,5}|\s{2,}\d{1,5}|\d{1,5}\s*\||\d{1,5}\s{2,})")
+_PDF_FN_LINE_RE = re.compile(r"^\s*(?:\[\d{1,3}\]|\(\d{1,3}\)|[¹²³⁴⁵⁶⁷⁸⁹]+)\s+\S")
+_PDF_FN_SEP_RE = re.compile(r"^\s*[-_—–]{3,25}\s*$")
+
+
+def _normalize_pdf_edge(line: str) -> str:
+    """Normalize a PDF top/bottom margin line by stripping edge page numbers and masking digits."""
+    s = line.strip()
+    s = re.sub(r"^\d{1,5}\s*(?:[|—–·•:\-]+\s*|\s{2,})?", "", s)
+    s = re.sub(r"(?:\s*[|—–·•:\-]+|\s{2,})?\s*\d{1,5}$", "", s)
+    s = re.sub(r"\d+", "#", s)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    return s
 
 
 def _strip_pdf_running_chrome(pages: List[str]) -> List[str]:
-    """Strip standalone page numbers and repeated running headers/footers across PDF pages."""
-    non_empty = [p.splitlines() for p in pages if p.strip()]
-    repeated_edges: set = set()
-    if len(non_empty) >= 3:
-        first_counts: Counter = Counter()
-        last_counts: Counter = Counter()
-        for lines in non_empty:
-            stripped = [ln.strip() for ln in lines if ln.strip()]
-            if stripped:
-                first_counts[stripped[0]] += 1
-                last_counts[stripped[-1]] += 1
-        threshold = max(3, len(non_empty) // 2)
-        for line_txt, cnt in list(first_counts.items()) + list(last_counts.items()):
-            if cnt >= threshold and len(line_txt) <= 90:
-                repeated_edges.add(line_txt)
+    """Strip standalone page numbers and static or dynamic running headers/footers."""
+    page_edge_lines: List[List[str]] = []
+    for p in pages:
+        stripped = [ln.strip() for ln in p.splitlines() if ln.strip()]
+        if stripped:
+            page_edge_lines.append(stripped)
+
+    repeated_exact: set = set()
+    repeated_norms: set = set()
+    n_non_empty = len(page_edge_lines)
+    if n_non_empty >= 3:
+        exact_counts: Counter = Counter()
+        norm_counts: Counter = Counter()
+        for stripped in page_edge_lines:
+            edges = [stripped[0]] + ([stripped[-1]] if len(stripped) > 1 else [])
+            seen_on_page: set = set()
+            for edge in edges:
+                if len(edge) > 90:
+                    continue
+                exact_counts[edge] += 1
+                norm = _normalize_pdf_edge(edge)
+                if len(norm) >= 3 and norm not in seen_on_page:
+                    norm_counts[norm] += 1
+                    seen_on_page.add(norm)
+
+        exact_threshold = max(3, n_non_empty // 2)
+        for line_txt, cnt in exact_counts.items():
+            if cnt >= exact_threshold:
+                repeated_exact.add(line_txt)
+
+        norm_threshold = max(2, n_non_empty // 4) if n_non_empty >= 4 else 2
+        for norm_txt, cnt in norm_counts.items():
+            if cnt >= norm_threshold:
+                repeated_norms.add(norm_txt)
+
+        # Sliding 6-page window catches per-chapter running headers in long PDFs
+        for start in range(max(0, n_non_empty - 5)):
+            win_counts: Counter = Counter()
+            for stripped in page_edge_lines[start : start + 6]:
+                for edge in ([stripped[0]] + ([stripped[-1]] if len(stripped) > 1 else [])):
+                    if len(edge) <= 85:
+                        norm = _normalize_pdf_edge(edge)
+                        if len(norm) >= 4:
+                            win_counts[norm] += 1
+            for norm_txt, cnt in win_counts.items():
+                if cnt >= 3:
+                    repeated_norms.add(norm_txt)
 
     cleaned_pages: List[str] = []
+    preserved_first_chapter_norms: set = set()
     for page in pages:
+        raw_lines = page.splitlines()
+        non_empty_indices = [idx for idx, ln in enumerate(raw_lines) if ln.strip()]
+        top_idx = non_empty_indices[0] if non_empty_indices else -1
+        bot_idx = non_empty_indices[-1] if len(non_empty_indices) > 1 else -1
+
         kept: List[str] = []
-        for raw_line in page.splitlines():
+        for idx, raw_line in enumerate(raw_lines):
             s = raw_line.strip()
-            if s and (_PAGE_NUM_RE.match(s) or s in repeated_edges):
+            if not s:
+                kept.append("")
                 continue
+            if _PAGE_NUM_RE.match(s) or s in repeated_exact:
+                continue
+            if idx in (top_idx, bot_idx) and len(s) <= 90:
+                norm = _normalize_pdf_edge(s)
+                if norm in repeated_norms:
+                    is_pure_chapter = bool(_CHAPTER_LINE_RE.match(s)) and not _PDF_EDGE_SEP_NUM_RE.search(s)
+                    if is_pure_chapter and norm not in preserved_first_chapter_norms:
+                        preserved_first_chapter_norms.add(norm)
+                    else:
+                        continue
             kept.append(raw_line.rstrip())
         cleaned_pages.append("\n".join(kept).strip())
     return cleaned_pages
+
+
+def _extract_pdf_page_footnotes(cleaned_pages: List[str]) -> Tuple[List[str], List[List[str]]]:
+    """Detach page-bottom footnote blocks from PDF pages so body paragraphs reflow cleanly."""
+    bodies: List[str] = []
+    footnotes_per_page: List[List[str]] = []
+
+    for page in cleaned_pages:
+        lines = [ln.rstrip() for ln in page.splitlines()]
+        non_empty = [(i, ln.strip()) for i, ln in enumerate(lines) if ln.strip()]
+        if not non_empty:
+            bodies.append("")
+            footnotes_per_page.append([])
+            continue
+
+        cut_idx: Optional[int] = None
+        tail = non_empty[-10:]
+        for pos, (line_idx, s) in enumerate(tail):
+            if _PDF_FN_SEP_RE.match(s) and pos + 1 < len(tail):
+                after = [t_s for _, t_s in tail[pos + 1 :]]
+                if after and any(_PDF_FN_LINE_RE.match(a) or re.match(r"^\d{1,2}[.)]\s+\S", a) for a in after):
+                    cut_idx = line_idx
+                    break
+
+        if cut_idx is None:
+            fn_start_pos: Optional[int] = None
+            for idx_rev in range(len(non_empty) - 1, max(-1, len(non_empty) - 8), -1):
+                line_idx, s = non_empty[idx_rev]
+                if _PDF_FN_LINE_RE.match(s):
+                    fn_start_pos = line_idx
+                else:
+                    break
+            if fn_start_pos is not None:
+                cut_idx = fn_start_pos
+
+        if cut_idx is not None:
+            body = "\n".join(lines[:cut_idx]).strip()
+            fn_lines = [ln.strip() for ln in lines[cut_idx:] if ln.strip() and not _PDF_FN_SEP_RE.match(ln.strip())]
+            bodies.append(body)
+            footnotes_per_page.append(fn_lines)
+        else:
+            bodies.append("\n".join(lines).strip())
+            footnotes_per_page.append([])
+
+    return bodies, footnotes_per_page
 
 
 def _reflow_pdf_text(text: str) -> str:
@@ -1363,11 +1674,70 @@ def _extract_pdf_pages_and_toc(pdf_path: Path) -> Tuple[List[str], List[Tuple[st
     return pages, toc_entries
 
 
+def _attach_footnotes_to_units(
+    units: List[Tuple[str, str, str]],
+    page_bodies: Sequence[str],
+    footnotes_per_page: Sequence[List[str]],
+) -> List[Tuple[str, str, str]]:
+    """Append detached PDF page footnotes cleanly to the end of their owning section unit."""
+    if not any(footnotes_per_page) or not units:
+        return units
+    if len(units) == 1:
+        all_fn = [fn for page_fns in footnotes_per_page for fn in page_fns]
+        loc, title, body = units[0]
+        return [(loc, title, f"{body.rstrip()}\n\n" + "\n\n".join(all_fn))]
+
+    start_pages: List[int] = []
+    cursor = 0
+    for _loc, title, _body in units:
+        clean_title = re.sub(r"^#+\s*", "", title).strip().lower()
+        found_p = cursor
+        if clean_title:
+            for p_idx in range(cursor, len(page_bodies)):
+                if clean_title in page_bodies[p_idx].lower():
+                    found_p = p_idx
+                    cursor = p_idx
+                    break
+        start_pages.append(found_p)
+
+    out: List[Tuple[str, str, str]] = []
+    for idx, (loc, title, body) in enumerate(units):
+        p_begin = start_pages[idx]
+        p_end = start_pages[idx + 1] if idx + 1 < len(start_pages) else len(footnotes_per_page)
+        sec_fns = [fn for p_i in range(p_begin, max(p_begin + 1, p_end)) for fn in footnotes_per_page[p_i]]
+        if sec_fns:
+            body = f"{body.rstrip()}\n\n" + "\n\n".join(sec_fns)
+        out.append((loc, title, body))
+    return out
+
+
+def _join_pdf_pages_for_reflow(page_bodies: Sequence[str]) -> str:
+    """Join PDF page bodies without introducing false paragraph breaks mid-sentence."""
+    non_empty = [p.strip() for p in page_bodies if p.strip()]
+    if not non_empty:
+        return ""
+    parts: List[str] = [non_empty[0]]
+    term_punct = (".", "!", "?", "…", '"', "”", "」", "。", "！", "？", ":")
+    for nxt in non_empty[1:]:
+        prev_lines = [ln.strip() for ln in parts[-1].splitlines() if ln.strip()]
+        nxt_lines = [ln.strip() for ln in nxt.splitlines() if ln.strip()]
+        prev_last = prev_lines[-1] if prev_lines else ""
+        nxt_first = nxt_lines[0] if nxt_lines else ""
+        nxt_is_break = bool(
+            _CHAPTER_LINE_RE.match(nxt_first)
+            or re.match(r"^(?:#{1,6}\s+|[-*•–—]\s+|\d+[.)]\s+|>\s+)", nxt_first)
+        )
+        sep = "\n" if (prev_last and not prev_last.endswith(term_punct) and not nxt_is_break) else "\n\n"
+        parts.append(sep + nxt)
+    return "".join(parts)
+
+
 def _extract_pdf_units(pdf_path: Path) -> List[Tuple[str, str, str]]:
     """Extract structured (source_location, title, normalized_markdown_text) units from a PDF."""
     pages, toc_entries = _extract_pdf_pages_and_toc(pdf_path)
     cleaned_pages = _strip_pdf_running_chrome(pages)
-    combined = "\n\n".join(p for p in cleaned_pages if p.strip())
+    page_bodies, footnotes_per_page = _extract_pdf_page_footnotes(cleaned_pages)
+    combined = _join_pdf_pages_for_reflow(page_bodies)
     if not combined.strip():
         raise ValueError(
             f"No extractable text found in PDF '{pdf_path.name}' "
@@ -1377,13 +1747,13 @@ def _extract_pdf_units(pdf_path: Path) -> List[Tuple[str, str, str]]:
     reflowed = _reflow_pdf_text(combined)
     sections = _split_markdown_sections(reflowed, pdf_path.name)
     if len(sections) >= 2:
-        return sections
+        return _attach_footnotes_to_units(sections, page_bodies, footnotes_per_page)
 
     # If heading heuristic found <= 1 section but PDF TOC bookmarks exist, split by TOC page ranges
     valid_toc: List[Tuple[str, int]] = []
     seen_pages: set = set()
     for title, pidx in toc_entries:
-        if 0 <= pidx < len(cleaned_pages) and pidx not in seen_pages:
+        if 0 <= pidx < len(page_bodies) and pidx not in seen_pages:
             seen_pages.add(pidx)
             valid_toc.append((title, pidx))
     valid_toc.sort(key=lambda item: item[1])
@@ -1392,12 +1762,18 @@ def _extract_pdf_units(pdf_path: Path) -> List[Tuple[str, str, str]]:
         toc_units: List[Tuple[str, str, str]] = []
         first_pidx = valid_toc[0][1]
         if first_pidx > 0:
-            front = _reflow_pdf_text("\n\n".join(cleaned_pages[:first_pidx]))
+            front = _reflow_pdf_text(_join_pdf_pages_for_reflow(page_bodies[:first_pidx]))
+            front_fns = [fn for p_i in range(0, first_pidx) for fn in footnotes_per_page[p_i]]
+            if front_fns and front.strip():
+                front = f"{front.rstrip()}\n\n" + "\n\n".join(front_fns)
             if front.strip():
                 toc_units.append((f"{pdf_path.name}#pp.1-{first_pidx}", "Front Matter", f"# Front Matter\n\n{front}"))
         for idx, (title, start_p) in enumerate(valid_toc):
-            end_p = valid_toc[idx + 1][1] if idx + 1 < len(valid_toc) else len(cleaned_pages)
-            body = _reflow_pdf_text("\n\n".join(cleaned_pages[start_p:end_p]))
+            end_p = valid_toc[idx + 1][1] if idx + 1 < len(valid_toc) else len(page_bodies)
+            body = _reflow_pdf_text(_join_pdf_pages_for_reflow(page_bodies[start_p:end_p]))
+            sec_fns = [fn for p_i in range(start_p, end_p) for fn in footnotes_per_page[p_i]]
+            if sec_fns and body.strip():
+                body = f"{body.rstrip()}\n\n" + "\n\n".join(sec_fns)
             if body.strip():
                 body_out = body if body.lstrip().startswith("#") else f"# {title}\n\n{body}"
                 toc_units.append((f"{pdf_path.name}#pp.{start_p + 1}-{end_p}", title, body_out))
@@ -1405,31 +1781,41 @@ def _extract_pdf_units(pdf_path: Path) -> List[Tuple[str, str, str]]:
             return toc_units
 
     # Last fallback: group pages into balanced sections (~2500 words or 10 pages max per unit)
-    if len(cleaned_pages) > 10 and count_words(reflowed) > 2500:
+    if len(page_bodies) > 10 and count_words(reflowed) > 2500:
         page_units: List[Tuple[str, str, str]] = []
         buf: List[str] = []
+        buf_fns: List[str] = []
         start_p = 1
-        for pno, ptext in enumerate(cleaned_pages, 1):
+        for pno, ptext in enumerate(page_bodies, 1):
             if ptext.strip():
                 buf.append(_reflow_pdf_text(ptext))
+            buf_fns.extend(footnotes_per_page[pno - 1])
             if buf and (count_words("\n\n".join(buf)) >= 2000 or (pno - start_p + 1) >= 10):
                 title = f"Pages {start_p}-{pno}"
-                page_units.append((f"{pdf_path.name}#pp.{start_p}-{pno}", title, f"# {title}\n\n" + "\n\n".join(buf)))
+                body_str = f"# {title}\n\n" + "\n\n".join(buf)
+                if buf_fns:
+                    body_str += "\n\n" + "\n\n".join(buf_fns)
+                page_units.append((f"{pdf_path.name}#pp.{start_p}-{pno}", title, body_str))
                 buf = []
+                buf_fns = []
                 start_p = pno + 1
         if buf:
-            title = f"Pages {start_p}-{len(cleaned_pages)}"
-            page_units.append((f"{pdf_path.name}#pp.{start_p}-{len(cleaned_pages)}", title, f"# {title}\n\n" + "\n\n".join(buf)))
+            title = f"Pages {start_p}-{len(page_bodies)}"
+            body_str = f"# {title}\n\n" + "\n\n".join(buf)
+            if buf_fns:
+                body_str += "\n\n" + "\n\n".join(buf_fns)
+            page_units.append((f"{pdf_path.name}#pp.{start_p}-{len(page_bodies)}", title, body_str))
         if page_units:
             return page_units
 
-    return [(pdf_path.name, pdf_path.stem, reflowed)]
+    return _attach_footnotes_to_units([(pdf_path.name, pdf_path.stem, reflowed)], page_bodies, footnotes_per_page)
 
 
 def _strip_inline_markdown(text: str) -> str:
     """Strip inline Markdown markers while preserving normal text and punctuation."""
     s = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+    s = re.sub(r"\^\{([^}]+)\}", r"[\1]", s)
     s = re.sub(r"`([^`]+)`", r"\1", s)
     s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
     s = re.sub(r"__([^_]+)__", r"\1", s)
@@ -1442,7 +1828,7 @@ def _markdown_to_plain_txt(md_text: str) -> str:
     """Convert Markdown text into clean publication-ready plain text."""
     out_lines: List[str] = []
     in_fence = False
-    for line in md_text.splitlines():
+    for line in _strip_block_anchors(md_text).splitlines():
         s = line.strip()
         if s.startswith("```") or s.startswith("~~~"):
             in_fence = not in_fence
@@ -1496,17 +1882,107 @@ def render_plain_txt(
     return "\n\n".join(parts).rstrip() + "\n"
 
 
-def _inline_md_to_xhtml(text: str) -> str:
-    """Escape HTML and render basic inline bold/italic/code spans cleanly."""
-    escaped = html.escape(text, quote=False)
-    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+def _extract_orig_inline_assets(orig_inner: str) -> Tuple[Dict[str, List[Tuple[str, bool, str]]], Dict[str, str], str]:
+    """Index original <a>, <img>, and <sup> inline markup from XHTML leaf block content."""
+    links_by_href: Dict[str, List[Tuple[str, bool, str]]] = {}
+    imgs_by_src: Dict[str, str] = {}
+    sup_open_default = "<sup>"
+
+    for m_a in re.finditer(r"(?is)(<a\b([^>]*)>)(.*?)</a>", orig_inner):
+        open_tag, attrs, body = m_a.group(1), m_a.group(2), m_a.group(3)
+        m_href = re.search(r'\bhref\s*=\s*(["\'])(.*?)\1', attrs, re.IGNORECASE)
+        if not m_href:
+            continue
+        href_key = html.unescape(m_href.group(2)).strip()
+        m_sup = re.match(r"^\s*(<sup\b[^>]*>)(.*?)</sup>\s*$", body, re.IGNORECASE | re.DOTALL)
+        had_sup = bool(m_sup)
+        sup_open = m_sup.group(1) if m_sup else "<sup>"
+        links_by_href.setdefault(href_key, []).append((open_tag, had_sup, sup_open))
+
+    for m_img in re.finditer(r"(?is)<img\b([^>]*)/?>", orig_inner):
+        m_src = re.search(r'\bsrc\s*=\s*(["\'])(.*?)\1', m_img.group(1), re.IGNORECASE)
+        if m_src:
+            src_key = html.unescape(m_src.group(2)).strip()
+            tag_txt = m_img.group(0)
+            if not tag_txt.endswith("/>"):
+                tag_txt = tag_txt[:-1] + "/>"
+            imgs_by_src.setdefault(src_key, tag_txt)
+
+    m_plain_sup = re.search(r"(?is)<sup\b[^>]*>", orig_inner)
+    if m_plain_sup:
+        sup_open_default = m_plain_sup.group(0)
+
+    return links_by_href, imgs_by_src, sup_open_default
+
+
+def _inline_md_to_xhtml(text: str, orig_inner: str = "") -> str:
+    """Escape HTML and render Markdown inline spans while preserving original <a>/<sup>/<img> attrs."""
+    links_by_href, imgs_by_src, sup_open_default = (
+        _extract_orig_inline_assets(orig_inner) if orig_inner else ({}, {}, "<sup>")
+    )
+    tokens: List[str] = []
+
+    def _stash(rendered_html: str) -> str:
+        tok = f"\x00MDTOK{len(tokens)}\x00"
+        tokens.append(rendered_html)
+        return tok
+
+    def _render_simple_inline(segment: str) -> str:
+        esc = html.escape(segment, quote=False)
+        esc = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", esc)
+        esc = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"<em>\1</em>", esc)
+        return esc
+
+    working = text
+    working = re.sub(
+        r"`([^`]+)`",
+        lambda m: _stash(f"<code>{html.escape(m.group(1), quote=False)}</code>"),
+        working,
+    )
+
+    def _stash_img(m: re.Match) -> str:
+        alt, src = m.group(1).strip(), m.group(2).strip()
+        is_img_ext = bool(re.search(r"\.(?:png|jpe?g|gif|svg|webp|bmp|avif)(?:[?#].*)?$", src, re.IGNORECASE))
+        if src not in imgs_by_src and not is_img_ext:
+            # Exclamation mark immediately preceding a footnote or cross-reference link
+            return "!" + m.group(0)[1:]
+        if src in imgs_by_src:
+            return _stash(imgs_by_src[src])
+        return _stash(
+            f'<img src="{html.escape(src, quote=True)}" alt="{html.escape(alt, quote=True)}"/>'
+        )
+
+    working = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", _stash_img, working)
+
+    def _stash_link(m: re.Match) -> str:
+        label, href = m.group(1), m.group(2).strip()
+        rendered_lbl = _render_simple_inline(label)
+        bucket = links_by_href.get(href)
+        if bucket:
+            open_a, had_sup, sup_open = bucket.pop(0)
+            if had_sup:
+                return _stash(f"{open_a}{sup_open}{rendered_lbl}</sup></a>")
+            return _stash(f"{open_a}{rendered_lbl}</a>")
+        return _stash(f'<a href="{html.escape(href, quote=True)}">{rendered_lbl}</a>')
+
+    working = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", _stash_link, working)
+    working = re.sub(
+        r"\^\{([^}]+)\}",
+        lambda m: _stash(f"{sup_open_default}{_render_simple_inline(m.group(1))}</sup>"),
+        working,
+    )
+
+    escaped = html.escape(working, quote=False)
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
     escaped = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"<em>\1</em>", escaped)
+    for idx, tok_html in enumerate(tokens):
+        escaped = escaped.replace(f"\x00MDTOK{idx}\x00", tok_html)
     return escaped
 
 
 def _markdown_to_xhtml_body(md_text: str) -> str:
     """Convert Markdown text into valid XHTML body fragment."""
+    md_text = _strip_block_anchors(md_text)
     html_parts: List[str] = []
     in_fence = False
     code_buf: List[str] = []
@@ -1929,6 +2405,164 @@ def resolve_memory_path(
     return pack_root / "memory" / f"glossary-{prefix}.csv"
 
 
+_COMMON_DOMAIN_TERMS = {
+    "prologue", "epilogue", "preface", "foreword", "afterword",
+    "footnote", "appendix", "table of contents", "acknowledgement",
+    "glossary", "pseudonym", "narrator",
+}
+
+
+def _row_matches_domain(row: Dict[str, str], domain: str) -> bool:
+    """Determine whether a Tier-1 memory row matches the requested project domain."""
+    dom = (domain or "all").strip().lower()
+    if dom in ("", "all"):
+        return True
+
+    term_low = row.get("term", "").strip().lower()
+    if term_low in _COMMON_DOMAIN_TERMS:
+        return True
+
+    tclass = row.get("term_class", "").strip().lower()
+    meta_txt = " ".join([
+        row.get("context", ""),
+        row.get("notes", ""),
+        row.get("evidence", ""),
+    ]).lower()
+    is_fantasy_lore = any(
+        kw in meta_txt for kw in ("fantasy", "lore", "wuxia", "xianxia", "magic", "story_bible", "fiction")
+    )
+
+    if dom == "technical":
+        return tclass != "legal-term" and not is_fantasy_lore
+    if dom == "legal":
+        return tclass != "technical-term" and not is_fantasy_lore
+    if dom == "fiction":
+        return tclass not in {"technical-term", "legal-term"}
+    if dom == "general":
+        return not is_fantasy_lore and tclass not in {"technical-term", "legal-term"}
+    return True
+
+
+def _collect_source_corpus(workspace: Path) -> str:
+    """Return combined source text from source_chunks/ with @bN anchors stripped."""
+    chunks_dir = workspace / "source_chunks"
+    if not chunks_dir.is_dir():
+        return ""
+    parts = [
+        _strip_block_anchors(p.read_text(encoding="utf-8", errors="replace"))
+        for p in sorted(chunks_dir.glob("*.md"), key=lambda fp: natural_sort_key(fp.name))
+    ]
+    return "\n\n".join(parts)
+
+
+_PROJECT_ONLY_TERM_CLASSES = {
+    "proper-name", "proper_name", "proper-noun", "character", "place",
+    "person", "organization", "work-specific", "location", "magic_skill", "rank_title",
+}
+
+
+def _is_project_specific_glossary_row(row: Dict[str, str]) -> bool:
+    """Return True if a row represents a story/project-specific entity unsuitable for global memory."""
+    tclass = row.get("term_class", "").strip().lower()
+    if tclass in _PROJECT_ONLY_TERM_CLASSES:
+        return True
+    notes = row.get("notes", "").lower()
+    return any(tag in notes for tag in ("[no-promote]", "project-only", "story-specific"))
+
+
+def sync_evidence_ledgers(workspace: Path) -> Dict[str, int]:
+    """
+    Bidirectionally bridge Phase 3 evidence records between JSONL (evidence-ledger.jsonl)
+    and d-research v3.3 37-column CSV (evidence-ledger.csv) by claim_id.
+    """
+    jsonl_path = workspace / "evidence-ledger.jsonl"
+    csv_path = workspace / "evidence-ledger.csv"
+
+    csv_rows = read_csv_rows(csv_path, D_RESEARCH_LEDGER_37_HEADER) if csv_path.is_file() else []
+    csv_by_id: Dict[str, int] = {}
+    for idx, r in enumerate(csv_rows):
+        cid = r.get("claim_id", "").strip()
+        if cid:
+            csv_by_id[cid] = idx
+
+    jsonl_records: List[Dict[str, Any]] = []
+    jsonl_ids: Set[str] = set()
+    if jsonl_path.is_file():
+        for raw_line in jsonl_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = raw_line.strip()
+            if not s:
+                continue
+            try:
+                obj = json.loads(s)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict):
+                jsonl_records.append(obj)
+                cid = str(obj.get("claim_id", "")).strip()
+                if cid:
+                    jsonl_ids.add(cid)
+
+    added_to_csv = 0
+    added_to_jsonl = 0
+    next_seq = len(csv_rows) + 1
+
+    for obj in jsonl_records:
+        cid = str(obj.get("claim_id", "")).strip()
+        if not cid:
+            cid = f"C{next_seq:03d}"
+            next_seq += 1
+        if cid in csv_by_id:
+            continue
+        row = {col: str(obj.get(col, "")).strip() for col in D_RESEARCH_LEDGER_37_HEADER}
+        row["claim_id"] = cid
+        if not row["claim"]:
+            row["claim"] = row["evidence"] or row["source_title"] or row["sub_question"]
+        if not row["record_type"]:
+            row["record_type"] = "claim"
+        if not row["source_access_class"]:
+            row["source_access_class"] = "standard_public"
+        if not row["subject_class"]:
+            row["subject_class"] = "unknown"
+        if not row["purpose_category"]:
+            row["purpose_category"] = "general_research"
+        if not row["policy_tier"]:
+            row["policy_tier"] = "R0"
+        if not row["data_sensitivity"]:
+            row["data_sensitivity"] = "public"
+        if not row["discovery_disposition"]:
+            row["discovery_disposition"] = "evidence"
+        if not row["reporting_disposition"]:
+            row["reporting_disposition"] = "main_findings"
+        if not row["redaction_class"]:
+            row["redaction_class"] = "none"
+        csv_by_id[cid] = len(csv_rows)
+        csv_rows.append(row)
+        added_to_csv += 1
+
+    for r in csv_rows:
+        cid = r.get("claim_id", "").strip()
+        if not cid or cid in jsonl_ids:
+            continue
+        jsonl_records.append({k: v for k, v in r.items() if v})
+        jsonl_ids.add(cid)
+        added_to_jsonl += 1
+
+    if csv_rows or csv_path.is_file():
+        write_csv_rows(csv_path, D_RESEARCH_LEDGER_37_HEADER, csv_rows)
+    if added_to_jsonl > 0:
+        jsonl_path.write_text(
+            "\n".join(json.dumps(rec, ensure_ascii=False) for rec in jsonl_records) + "\n",
+            encoding="utf-8",
+        )
+
+    return {
+        "csv_rows": len(csv_rows),
+        "jsonl_rows": len(jsonl_records),
+        "added_to_csv": added_to_csv,
+        "added_to_jsonl": added_to_jsonl,
+    }
+
+
 def sync_glossary_ops(
     pack_root: Path,
     workspace: Path,
@@ -1936,8 +2570,12 @@ def sync_glossary_ops(
     seed: bool = False,
     promote: bool = False,
     target_lang: Optional[str] = None,
+    domain: str = "all",
+    filter_to_source: bool = False,
+    approve_clean: bool = False,
+    include_proper_nouns: bool = False,
 ) -> Dict[str, Any]:
-    """Perform deterministic Tier-1/Tier-2 glossary seeding, inbox merge, and promotion."""
+    """Perform deterministic Tier-1/Tier-2 glossary seeding, inbox merge, ledger bridge, and guarded promotion."""
     glossary_path = workspace / "glossary.csv"
     inbox_path = workspace / "glossary-inbox.jsonl"
     memory_path = resolve_memory_path(pack_root, workspace, memory_arg, target_lang)
@@ -1949,9 +2587,13 @@ def sync_glossary_ops(
     index: Dict[Tuple[str, str], int] = {glossary_key(r): i for i, r in enumerate(rows)}
 
     seeded_count = 0
+    domain_skipped = 0
+    pruned_unused = 0
     inbox_added = 0
     inbox_skipped_dup = 0
+    auto_approved_count = 0
     promoted_count = 0
+    promoted_skipped_project = 0
     conflicts: List[Dict[str, str]] = []
     warnings: List[str] = []
 
@@ -1966,6 +2608,9 @@ def sync_glossary_ops(
             mem_rows = read_csv_rows(memory_path, GLOSSARY_HEADER)
             for mr in mem_rows:
                 if mr.get("status", "").lower() != "approved":
+                    continue
+                if not _row_matches_domain(mr, domain):
+                    domain_skipped += 1
                     continue
                 k = glossary_key(mr)
                 if not k[0]:
@@ -1996,6 +2641,12 @@ def sync_glossary_ops(
                     f"glossary-inbox.jsonl line {line_no} missing required 'term' or 'preferred_translation'"
                 )
 
+            conf_val = (str(obj.get("confidence", "medium")).strip() or "medium").lower()
+            stat_val = (str(obj.get("status", "proposed")).strip() or "proposed").lower()
+            if approve_clean and stat_val == "proposed" and conf_val in {"high", "medium"}:
+                stat_val = "approved"
+                auto_approved_count += 1
+
             candidate = {
                 "term": term,
                 "preferred_translation": pref,
@@ -2004,8 +2655,8 @@ def sync_glossary_ops(
                 "context": str(obj.get("context", "")).strip(),
                 "source_location": str(obj.get("source_location", "")).strip() or "inbox",
                 "evidence": str(obj.get("evidence", "worker-inbox")).strip() or "worker-inbox",
-                "confidence": str(obj.get("confidence", "medium")).strip() or "medium",
-                "status": str(obj.get("status", "proposed")).strip() or "proposed",
+                "confidence": conf_val,
+                "status": stat_val,
                 "notes": str(obj.get("notes", "")).strip(),
             }
             k = glossary_key(candidate)
@@ -2026,6 +2677,32 @@ def sync_glossary_ops(
                 rows.append(candidate)
                 inbox_added += 1
 
+    if approve_clean:
+        conflict_terms = {(c["term"].lower(), c["context"].lower()) for c in conflicts}
+        for r in rows:
+            if (
+                r.get("status", "").lower() == "proposed"
+                and r.get("confidence", "").lower() in {"high", "medium"}
+                and glossary_key(r) not in conflict_terms
+            ):
+                r["status"] = "approved"
+                auto_approved_count += 1
+
+    if filter_to_source:
+        corpus = _collect_source_corpus(workspace)
+        if not corpus:
+            warnings.append("No scanned source_chunks/ found; skipped --filter-to-source pruning.")
+        else:
+            filtered_rows: List[Dict[str, str]] = []
+            for r in rows:
+                is_mem_seed = r.get("source_location", "").strip().lower() == "memory-seed"
+                term_val = r.get("term", "").strip()
+                if is_mem_seed and term_val and not _phrase_pattern(term_val).search(corpus):
+                    pruned_unused += 1
+                    continue
+                filtered_rows.append(r)
+            rows = filtered_rows
+
     write_csv_rows(glossary_path, GLOSSARY_HEADER, rows)
 
     if promote:
@@ -2035,6 +2712,9 @@ def sync_glossary_ops(
         mem_index: Dict[Tuple[str, str], int] = {glossary_key(r): i for i, r in enumerate(mem_rows)}
         for r in rows:
             if r.get("status", "").lower() == "approved" and r.get("confidence", "").lower() == "high":
+                if not include_proper_nouns and _is_project_specific_glossary_row(r):
+                    promoted_skipped_project += 1
+                    continue
                 k = glossary_key(r)
                 if not k[0]:
                     continue
@@ -2054,14 +2734,21 @@ def sync_glossary_ops(
                 promoted_count += 1
         write_csv_rows(memory_path, GLOSSARY_HEADER, mem_rows)
 
+    ledger_sync = sync_evidence_ledgers(workspace)
+
     return {
         "glossary_path": str(glossary_path),
         "memory_path": str(memory_path) if memory_path else None,
         "total_project_rows": len(rows),
         "seeded": seeded_count,
+        "domain_skipped": domain_skipped,
+        "pruned_unused": pruned_unused,
         "inbox_added": inbox_added,
         "inbox_duplicates_skipped": inbox_skipped_dup,
+        "auto_approved": auto_approved_count,
         "promoted": promoted_count,
+        "promoted_skipped_project_specific": promoted_skipped_project,
+        "ledger_sync": ledger_sync,
         "conflicts": conflicts,
         "warnings": warnings,
     }
@@ -2140,6 +2827,10 @@ def cmd_init(args: argparse.Namespace, pack_root: Path) -> int:
         if not p.exists():
             p.write_text("", encoding="utf-8")
 
+    csv_ledger = workspace / "evidence-ledger.csv"
+    if not csv_ledger.exists():
+        write_csv_rows(csv_ledger, D_RESEARCH_LEDGER_37_HEADER, [])
+
     cov_path = workspace / "research-coverage.json"
     if not cov_path.exists():
         cov_path.write_text(
@@ -2152,6 +2843,7 @@ def cmd_init(args: argparse.Namespace, pack_root: Path) -> int:
     source_lang = args.source_lang or "auto-detect"
     mode = args.mode or "faithful translation with light transcreation for idioms and dialogue"
     audience = args.audience or "General readers"
+    domain = getattr(args, "domain", "all") or "all"
     output_format = getattr(args, "output_format", None)
     if not output_format and str(args.source).lower().endswith(".pdf"):
         output_format = "txt, epub"
@@ -2177,7 +2869,7 @@ def cmd_init(args: argparse.Namespace, pack_root: Path) -> int:
         if "core/locales/vi-VN.md" not in style_text:
             style_text = style_text.rstrip() + (
                 "\n\n- Locale profile reference: `core/locales/vi-VN.md` "
-                "(Vietnamese pronoun matrix, Han-Viet vs. native balance, anti-translatorese rules).\n"
+                "(Vietnamese pronoun matrix, Hán-Việt vs. native balance, anti-translatorese rules).\n"
             )
             style_path.write_text(style_text, encoding="utf-8")
 
@@ -2186,6 +2878,7 @@ def cmd_init(args: argparse.Namespace, pack_root: Path) -> int:
         workspace=workspace,
         seed=True,
         target_lang=args.target_lang,
+        domain=domain,
     )
 
     result = {
@@ -2449,24 +3142,6 @@ def cmd_scan(args: argparse.Namespace, pack_root: Path) -> int:
     if source_epub_template:
         converted_notes += f"- Source EPUB template preserved: `{source_epub_template}` (layout/CSS/assets preserved on `.epub` merge)\n"
 
-    source_map_content = (
-        "# Source Map\n\n"
-        "## Overview\n"
-        f"- Source path: {source_path}\n"
-        f"- Total chunks: {len(meta_chunks)}\n"
-        f"- Total source words: {total_words}\n"
-        f"{converted_notes}"
-        "- Extraction hazards: None detected during automated scan\n\n"
-        "## Structure\n"
-        "| ID | Source location | Type | Notes | Risk |\n"
-        "|---|---|---|---|---|\n"
-        + "\n".join(structure_rows)
-        + "\n\n## High-Risk Items\n"
-        "| ID | Issue | Mitigation |\n"
-        "|---|---|---|\n"
-    )
-    (workspace / "source-map.md").write_text(source_map_content, encoding="utf-8")
-
     meta_payload = {
         "version": read_pack_version(pack_root),
         "scanned_at": datetime.now(timezone.utc).isoformat(),
@@ -2483,6 +3158,43 @@ def cmd_scan(args: argparse.Namespace, pack_root: Path) -> int:
         encoding="utf-8",
     )
 
+    # Auto-mine recurring candidate terms across all scanned chunks for Phase 3 research
+    mined = mine_terms_ops(workspace, top_n=200, min_freq=2)
+    cand_rows = []
+    for cand in mined["candidates"][:25]:
+        t_safe = cand["term"].replace("|", "\\|")
+        status_mark = "in glossary" if cand["in_glossary"] else "needs research"
+        cand_rows.append(
+            f"| {t_safe} | {cand['category_guess']} | {cand['count']} | "
+            f"{cand['chunk_count']} | {cand['first_chunk_id']} | {status_mark} |"
+        )
+    cand_section = (
+        "\n\n## Recurring Entities & Candidate Terms\n"
+        "| Term | Category | Count | Chunks | First Seen | Status |\n"
+        "|---|---|---|---|---|---|\n"
+        + ("\n".join(cand_rows) if cand_rows else "| (none detected at freq >= 2) | - | 0 | 0 | - | - |")
+        + "\n"
+    )
+
+    source_map_content = (
+        "# Source Map\n\n"
+        "## Overview\n"
+        f"- Source path: {source_path}\n"
+        f"- Total chunks: {len(meta_chunks)}\n"
+        f"- Total source words: {total_words}\n"
+        f"{converted_notes}"
+        "- Extraction hazards: None detected during automated scan\n\n"
+        "## Structure\n"
+        "| ID | Source location | Type | Notes | Risk |\n"
+        "|---|---|---|---|---|\n"
+        + "\n".join(structure_rows)
+        + "\n\n## High-Risk Items\n"
+        "| ID | Issue | Mitigation |\n"
+        "|---|---|---|\n"
+        + cand_section
+    )
+    (workspace / "source-map.md").write_text(source_map_content, encoding="utf-8")
+
     result = {
         "command": "scan",
         "workspace": str(workspace),
@@ -2490,6 +3202,8 @@ def cmd_scan(args: argparse.Namespace, pack_root: Path) -> int:
         "total_words": total_words,
         "layout_preserving_epub": bool(source_epub_template),
         "converted_sources": converted_sources,
+        "candidate_terms_count": mined["total_candidates"],
+        "candidate_terms_path": mined["output_path"],
         "chunk_ids": [c["chunk_id"] for c in meta_chunks],
     }
     if args.json:
@@ -2499,8 +3213,433 @@ def cmd_scan(args: argparse.Namespace, pack_root: Path) -> int:
         for conv in converted_sources:
             print(f"  Converted PDF -> TXT : {conv['converted_txt']}")
             print(f"  Converted PDF -> EPUB: {conv['converted_epub']}")
+        print(f"  Mined candidate terms: {mined['total_candidates']} -> {mined['output_path']}")
         for c in meta_chunks:
             print(f"  - {c['chunk_id']}: {c['source_words']}w, {c['source_paragraphs']}p -> {c['source_chunk_path']}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: mine-terms (Whole-Book Entity & Term Mining)
+# ---------------------------------------------------------------------------
+
+_TERM_STOPWORDS = {
+    "the", "a", "an", "this", "that", "these", "those", "there", "their", "they",
+    "here", "where", "when", "while", "since", "because", "although", "however",
+    "therefore", "meanwhile", "moreover", "furthermore", "nevertheless", "instead",
+    "before", "after", "during", "under", "over", "between", "against", "through",
+    "without", "within", "inside", "outside", "across", "around", "behind",
+    "beneath", "beside", "beyond", "toward", "towards", "despite", "upon", "into",
+    "onto", "near", "until", "unless", "once", "later", "soon", "perhaps",
+    "suddenly", "still", "even", "only", "just", "almost", "always", "never",
+    "often", "sometimes", "usually", "also", "next", "last", "several", "both",
+    "another", "such", "what", "which", "who", "whom", "whose", "why", "how",
+    "chapter", "section", "part", "page", "figure", "table", "appendix", "scene",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december", "mr", "mrs", "ms", "dr",
+    "sir", "lord", "lady", "yes", "no", "well", "now", "then", "but", "and",
+    "for", "with", "from", "about", "first", "second", "third", "one", "two",
+    "three", "all", "some", "many", "most", "each", "every", "other",
+}
+_ROMAN_NUMERALS = {"II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII"}
+
+
+def mine_terms_ops(workspace: Path, top_n: int = 200, min_freq: int = 2) -> Dict[str, Any]:
+    """Scan all source_chunks/*.md to extract recurring proper nouns, acronyms, and special terms."""
+    chunks_dir = workspace / "source_chunks"
+    if not chunks_dir.is_dir():
+        raise FileNotFoundError(f"source_chunks directory not found in {workspace}")
+
+    manifest_rows = read_csv_rows(workspace / "chunk-manifest.csv", MANIFEST_HEADER)
+    ordered_ids = [r["chunk_id"] for r in manifest_rows if r.get("chunk_id")]
+    chunk_files: List[Tuple[str, Path]] = []
+    seen_files: Set[Path] = set()
+    for cid in ordered_ids:
+        fp = chunks_dir / f"{cid}.md"
+        if fp.is_file():
+            chunk_files.append((cid, fp))
+            seen_files.add(fp)
+    for fp in sorted(chunks_dir.glob("*.md"), key=lambda p: natural_sort_key(p.name)):
+        if fp not in seen_files:
+            chunk_files.append((fp.stem, fp))
+
+    glossary_rows = read_csv_rows(workspace / "glossary.csv", GLOSSARY_HEADER)
+    glossary_terms = {r.get("term", "").strip().lower() for r in glossary_rows if r.get("term", "").strip()}
+
+    stats: Dict[str, Dict[str, Any]] = {}
+
+    def _record(raw_term: str, cid: str, cat: str) -> None:
+        clean = re.sub(r"\s+", " ", raw_term).strip(" ,.;:!?\"'“”‘’()[]{}")
+        words = clean.split()
+        while words and words[0].lower() in _TERM_STOPWORDS:
+            words.pop(0)
+        clean = " ".join(words)
+        if len(clean) < 2 or len(clean) > 60:
+            return
+        if clean.lower() in _TERM_STOPWORDS or clean.upper() in _ROMAN_NUMERALS:
+            return
+        if clean.isdigit():
+            return
+        key = clean.lower()
+        entry = stats.get(key)
+        if entry is None:
+            stats[key] = {
+                "term": clean,
+                "count": 1,
+                "chunks": [cid],
+                "first_chunk_id": cid,
+                "category_guess": cat,
+            }
+        else:
+            entry["count"] += 1
+            if cid not in entry["chunks"]:
+                entry["chunks"].append(cid)
+            # Prefer properly cased multi-occurrence surface form and specific category
+            if clean[0].isupper() and not entry["term"][0].isupper():
+                entry["term"] = clean
+            if cat == "acronym":
+                entry["category_guess"] = "acronym"
+
+    re_multi_cap = re.compile(
+        r"\b([A-ZÀ-Ỹ][a-zA-ZÀ-ỹ'’-]{1,24}(?:\s+(?:of|the|and|de|von|van|[A-ZÀ-Ỹ][a-zA-ZÀ-ỹ'’-]{1,24})){1,4})\b"
+    )
+    re_mid_cap = re.compile(
+        r"(?:[a-zà-ỹ0-9,;:\"'”»)\]]\s+)([A-ZÀ-Ỹ][a-zà-ỹ'’-]{2,24})\b"
+    )
+    re_acronym = re.compile(r"\b([A-Z]{2,}[A-Z0-9-]{0,8})\b")
+    re_cjk_bracket = re.compile(r"[《〈「『【]([^》〉」』】\n]{2,15})[》〉」』】]")
+    re_italic = re.compile(r"(?<!\*)\*([^*\n`]{3,35})\*(?!\*)")
+
+    for cid, fp in chunk_files:
+        raw = _strip_block_anchors(fp.read_text(encoding="utf-8", errors="replace"))
+        no_code = re.sub(r"(?s)(?:```|~~~).*?(?:```|~~~)", " ", raw)
+        no_code = re.sub(r"`[^`\n]+`", " ", no_code)
+        no_links = re.sub(r"\]\([^)]+\)", "]", no_code)
+
+        for m in re_acronym.finditer(no_links):
+            _record(m.group(1), cid, "acronym")
+        for m in re_multi_cap.finditer(no_links):
+            phrase = m.group(1)
+            # Ensure last word is capitalized and not just "The X of"
+            last_tok = phrase.split()[-1]
+            if last_tok[:1].isupper() and len(phrase.split()) >= 2:
+                _record(phrase, cid, "proper-noun")
+        for m in re_mid_cap.finditer(no_links):
+            _record(m.group(1), cid, "proper-noun")
+        for m in re_cjk_bracket.finditer(no_links):
+            _record(m.group(1), cid, "quoted-term")
+        for m in re_italic.finditer(no_links):
+            val = m.group(1).strip()
+            if len(val.split()) <= 4:
+                _record(val, cid, "italicized-term")
+
+    candidates: List[Dict[str, Any]] = []
+    for key, info in stats.items():
+        if info["count"] < min_freq and not (len(info["chunks"]) >= 2):
+            continue
+        candidates.append({
+            "term": info["term"],
+            "count": info["count"],
+            "chunk_count": len(info["chunks"]),
+            "chunks": info["chunks"],
+            "first_chunk_id": info["first_chunk_id"],
+            "category_guess": info["category_guess"],
+            "in_glossary": key in glossary_terms,
+        })
+
+    candidates.sort(key=lambda c: (-c["chunk_count"], -c["count"], c["term"].lower()))
+    candidates = candidates[:max(1, top_n)]
+
+    out_path = workspace / "candidate-terms.json"
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "chunks_scanned": len(chunk_files),
+        "min_freq": min_freq,
+        "total_candidates": len(candidates),
+        "unsolved_candidates": sum(1 for c in candidates if not c["in_glossary"]),
+        "candidates": candidates,
+    }
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return {
+        "output_path": str(out_path),
+        "chunks_scanned": len(chunk_files),
+        "total_candidates": len(candidates),
+        "unsolved_candidates": payload["unsolved_candidates"],
+        "candidates": candidates,
+    }
+
+
+def cmd_mine_terms(args: argparse.Namespace, pack_root: Path) -> int:
+    workspace = Path(args.workspace).expanduser().resolve()
+    if not workspace.is_dir():
+        print(f"Error: workspace directory does not exist: {workspace}", file=sys.stderr)
+        return 1
+    try:
+        res = mine_terms_ops(workspace, top_n=args.top, min_freq=args.min_freq)
+    except Exception as exc:
+        print(f"Error mining terms: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps({"command": "mine-terms", **res}, indent=2, ensure_ascii=False))
+    else:
+        print(f"Mined {res['total_candidates']} candidate term(s) across {res['chunks_scanned']} chunk(s) -> {res['output_path']}")
+        for c in res["candidates"][:20]:
+            mark = "glossary" if c["in_glossary"] else "new"
+            print(f"  - {c['term']} [{c['category_guess']}] count={c['count']} chunks={c['chunk_count']} ({mark})")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: bundle-chunk (Scoped Worker Prompt Packet Builder)
+# ---------------------------------------------------------------------------
+
+def _filter_markdown_table_rows(md_text: str, match_corpus_low: str, max_fallback_lines: int = 55) -> str:
+    """Keep Markdown headings and table rows relevant to match_corpus_low (or full text if compact)."""
+    lines = md_text.splitlines()
+    if len(lines) <= max_fallback_lines:
+        return md_text.strip()
+
+    kept: List[str] = []
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        s = ln.strip()
+        if s.startswith("|") and i + 1 < len(lines) and re.match(r"^\s*\|[\s:-]+\|", lines[i + 1]):
+            header = ln
+            sep = lines[i + 1]
+            matched_rows: List[str] = []
+            j = i + 2
+            while j < len(lines) and lines[j].strip().startswith("|"):
+                row_txt = lines[j].strip()
+                cells = [c.strip().lower() for c in row_txt.strip("|").split("|") if c.strip()]
+                if any(len(cell) >= 3 and cell in match_corpus_low for cell in cells[:2]) or "all" in cells[:2]:
+                    matched_rows.append(lines[j])
+                j += 1
+            if matched_rows:
+                kept.extend([header, sep, *matched_rows])
+            i = j
+            continue
+        if s.startswith("#") or s.startswith("- "):
+            kept.append(ln)
+        i += 1
+    return "\n".join(kept).strip()
+
+
+def bundle_chunk_ops(
+    pack_root: Path,
+    workspace: Path,
+    chunk_id: str,
+    role: str = "chunk-translator",
+    out_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Assemble a scoped worker prompt packet with Contract Card and chunk-filtered artifact slices."""
+    manifest_rows = read_csv_rows(workspace / "chunk-manifest.csv", MANIFEST_HEADER)
+    row_idx: Optional[int] = None
+    for idx, r in enumerate(manifest_rows):
+        if r.get("chunk_id", "").strip() == chunk_id:
+            row_idx = idx
+            break
+    if row_idx is None:
+        raise ValueError(f"Chunk '{chunk_id}' not found in {workspace / 'chunk-manifest.csv'}")
+
+    row = manifest_rows[row_idx]
+    prev_id = manifest_rows[row_idx - 1]["chunk_id"] if row_idx > 0 else ""
+    next_id = manifest_rows[row_idx + 1]["chunk_id"] if row_idx + 1 < len(manifest_rows) else ""
+
+    src_chunk_path = workspace / "source_chunks" / f"{chunk_id}.md"
+    if not src_chunk_path.is_file():
+        raise FileNotFoundError(f"Source chunk file not found: {src_chunk_path}")
+    source_text = src_chunk_path.read_text(encoding="utf-8", errors="replace").strip()
+
+    out_rel = row.get("output_path", "").strip() or f"output/{chunk_id}.md"
+    target_file = Path(out_rel) if Path(out_rel).is_absolute() else (workspace / out_rel)
+    target_text = target_file.read_text(encoding="utf-8", errors="replace").strip() if target_file.is_file() else ""
+
+    match_corpus = _strip_block_anchors(source_text) + "\n" + target_text
+    match_corpus_low = match_corpus.lower()
+
+    version = read_pack_version(pack_root)
+    role_prompt_rel = f"core/prompts/{role}.md"
+    contract_card = (
+        f"WORKER CONTRACT CARD — d-transcreate {version}. Read this first.\n\n"
+        f"1. Stay in role. You are {role} for scope {chunk_id}. Do exactly this scope,\n"
+        "   nothing outside it, even if adjacent text or issues are visible.\n"
+        f"2. Read your full role prompt at {role_prompt_rel} — the path is\n"
+        "   relative to the project root. If you cannot read it, STOP and return\n"
+        "   blocked: missing-role-prompt instead of improvising.\n"
+        "3. Propose, never write. Write ONLY the output paths listed in your dispatch\n"
+        "   unit. Never edit the Glossary, Style_Sheet, Story_Bible, Domain_Map,\n"
+        "   Chunk_Manifest, Unresolved_Issues_Log, or another worker's files. Return\n"
+        "   proposals and unresolved_items in your structured output; the Coordinator\n"
+        "   is the only writer of shared artifacts.\n"
+        "4. Never guess. Preserve formal data, follow approved Glossary/Style_Sheet slices,\n"
+        "   respect reveal timing, use severity scale critical/major/minor, report\n"
+        "   context_pressure honestly, and return ALL output contract fields."
+    )
+
+    # Synced Glossary slice (glossary.csv + pending glossary-inbox.jsonl)
+    glossary_rows = read_csv_rows(workspace / "glossary.csv", GLOSSARY_HEADER)
+    matched_glossary: List[Dict[str, str]] = []
+    for gr in glossary_rows:
+        term = gr.get("term", "").strip()
+        pref = gr.get("preferred_translation", "").strip()
+        forb = gr.get("forbidden_translation", "").strip()
+        hit = bool(term and _phrase_pattern(term).search(match_corpus))
+        if not hit and target_text:
+            for variant in [p.strip() for p in pref.split(";") + forb.split(";") if p.strip()]:
+                if _phrase_pattern(variant).search(target_text):
+                    hit = True
+                    break
+        if hit:
+            matched_glossary.append(gr)
+
+    inbox_path = workspace / "glossary-inbox.jsonl"
+    if inbox_path.is_file():
+        seen_terms = {r["term"].lower() for r in matched_glossary}
+        for raw_ln in inbox_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = raw_ln.strip()
+            if not s:
+                continue
+            try:
+                obj = json.loads(s)
+            except json.JSONDecodeError:
+                continue
+            term = str(obj.get("term", "")).strip()
+            if term and term.lower() not in seen_terms and _phrase_pattern(term).search(match_corpus):
+                matched_glossary.append({
+                    "term": term,
+                    "preferred_translation": str(obj.get("preferred_translation", "")).strip(),
+                    "forbidden_translation": str(obj.get("forbidden_translation", "")).strip(),
+                    "term_class": str(obj.get("term_class", "concept")).strip(),
+                    "context": str(obj.get("context", "")).strip(),
+                    "source_location": "inbox",
+                    "evidence": str(obj.get("evidence", "inbox")).strip(),
+                    "confidence": str(obj.get("confidence", "medium")).strip(),
+                    "status": "proposed-inbox",
+                    "notes": str(obj.get("notes", "")).strip(),
+                })
+                seen_terms.add(term.lower())
+
+    glossary_table_lines = [
+        "| term | preferred_translation | forbidden_translation | term_class | status | notes |",
+        "|---|---|---|---|---|---|",
+    ]
+    for mr in matched_glossary:
+        glossary_table_lines.append(
+            "| " + " | ".join(
+                str(mr.get(col, "")).replace("|", "\\|")
+                for col in ("term", "preferred_translation", "forbidden_translation", "term_class", "status", "notes")
+            ) + " |"
+        )
+    if len(matched_glossary) == 0:
+        glossary_table_lines.append("| (no matching glossary terms in this chunk) | - | - | - | - | - |")
+
+    brief_txt = (workspace / "translation-brief.md").read_text(encoding="utf-8", errors="replace").strip() if (workspace / "translation-brief.md").is_file() else ""
+    dossier_txt = (workspace / "research-dossier.md").read_text(encoding="utf-8", errors="replace").strip() if (workspace / "research-dossier.md").is_file() else ""
+    dossier_slice = _filter_markdown_table_rows(dossier_txt, match_corpus_low, max_fallback_lines=45) if dossier_txt else ""
+    style_txt = (workspace / "style-sheet.md").read_text(encoding="utf-8", errors="replace").strip() if (workspace / "style-sheet.md").is_file() else ""
+
+    continuity_slice_parts: List[str] = []
+    for fname, title_lbl in (("story-bible.md", "Story Bible Slice"), ("domain-map.md", "Domain Map Slice")):
+        fp = workspace / fname
+        if fp.is_file():
+            raw_c = fp.read_text(encoding="utf-8", errors="replace").strip()
+            filtered_c = _filter_markdown_table_rows(raw_c, match_corpus_low, max_fallback_lines=45)
+            if filtered_c:
+                continuity_slice_parts.append(f"## {title_lbl}\n\n{filtered_c}")
+
+    def _load_summary(cid_ref: str) -> str:
+        if not cid_ref:
+            return ""
+        sp = workspace / "summaries" / f"{cid_ref}.md"
+        if sp.is_file():
+            return sp.read_text(encoding="utf-8", errors="replace").strip()
+        return ""
+
+    prev_summary = _load_summary(prev_id)
+    next_summary = _load_summary(next_id)
+
+    unresolved_slice = ""
+    ui_path = workspace / "unresolved-issues.md"
+    if ui_path.is_file():
+        ui_lines = ui_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        matched_ui = [
+            ln for ln in ui_lines
+            if ln.strip().startswith("|") and (chunk_id.lower() in ln.lower() or "open" in ln.lower())
+        ]
+        if len(matched_ui) > 2:
+            unresolved_slice = "\n".join(matched_ui)
+
+    sections = [
+        f"# Worker Packet: {chunk_id} ({role})",
+        "```text\n" + contract_card + "\n```",
+        f"## Chunk Metadata\n- chunk_id: `{chunk_id}`\n- role: `{role}`\n- semantic_unit: {row.get('semantic_unit', '')}\n- source_location: {row.get('source_location', '')}\n- output_path: `{out_rel}`",
+    ]
+    if brief_txt:
+        sections.append("## Translation Brief\n\n" + brief_txt)
+    if dossier_slice:
+        sections.append("## Research Dossier Slice\n\n" + dossier_slice)
+    sections.append("## Glossary Slice\n\n" + "\n".join(glossary_table_lines))
+    if style_txt:
+        sections.append("## Style Sheet\n\n" + style_txt)
+    if continuity_slice_parts:
+        sections.extend(continuity_slice_parts)
+    if prev_summary:
+        sections.append(f"## Previous Chunk Summary ({prev_id})\n\n{prev_summary}")
+    if next_summary:
+        sections.append(f"## Next Chunk Summary ({next_id})\n\n{next_summary}")
+    if unresolved_slice:
+        sections.append("## Scoped Unresolved Issues\n\n" + unresolved_slice)
+
+    sections.append(
+        "## Source Chunk\n\n"
+        "_Preserve any `<!-- @bN -->` block anchor lines and Markdown links `[label](href)` verbatim._\n\n"
+        + source_text
+    )
+    if role != "chunk-translator" and target_text:
+        sections.append(f"## Target Chunk ({chunk_id})\n\n{target_text}")
+
+    packet_content = "\n\n---\n\n".join(sections) + "\n"
+    dest = out_path if out_path else (workspace / "packets" / f"{chunk_id}-{role}.md")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(packet_content, encoding="utf-8")
+
+    return {
+        "chunk_id": chunk_id,
+        "role": role,
+        "packet_path": str(dest),
+        "matched_glossary_rows": len(matched_glossary),
+        "packet_words": count_words(packet_content),
+    }
+
+
+def cmd_bundle_chunk(args: argparse.Namespace, pack_root: Path) -> int:
+    workspace = Path(args.workspace).expanduser().resolve()
+    if not workspace.is_dir():
+        print(f"Error: workspace directory does not exist: {workspace}", file=sys.stderr)
+        return 1
+    out_p = Path(args.out).expanduser().resolve() if args.out else None
+    try:
+        res = bundle_chunk_ops(
+            pack_root=pack_root,
+            workspace=workspace,
+            chunk_id=args.chunk,
+            role=args.role,
+            out_path=out_p,
+        )
+    except Exception as exc:
+        print(f"Error building worker packet: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps({"command": "bundle-chunk", **res}, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Bundled packet for {res['chunk_id']} ({res['role']}): "
+            f"{res['matched_glossary_rows']} glossary row(s), {res['packet_words']}w -> {res['packet_path']}"
+        )
     return 0
 
 
@@ -2617,6 +3756,10 @@ def cmd_sync_glossary(args: argparse.Namespace, pack_root: Path) -> int:
             seed=args.seed,
             promote=args.promote,
             target_lang=args.target_lang,
+            domain=args.domain,
+            filter_to_source=args.filter_to_source,
+            approve_clean=args.approve_clean,
+            include_proper_nouns=args.include_proper_nouns,
         )
     except Exception as exc:
         print(f"Error syncing glossary: {exc}", file=sys.stderr)
@@ -2626,8 +3769,12 @@ def cmd_sync_glossary(args: argparse.Namespace, pack_root: Path) -> int:
         print(json.dumps({"command": "sync-glossary", **res}, indent=2, ensure_ascii=False))
     else:
         print(f"Glossary synced: {res['glossary_path']}")
-        print(f"  Seeded: {res['seeded']}, Inbox added: {res['inbox_added']}, "
-              f"Duplicates skipped: {res['inbox_duplicates_skipped']}, Promoted: {res['promoted']}")
+        print(
+            f"  Seeded: {res['seeded']} (domain skipped: {res['domain_skipped']}), "
+            f"Pruned unused: {res['pruned_unused']}, Inbox added: {res['inbox_added']}, "
+            f"Auto-approved: {res['auto_approved']}, Promoted: {res['promoted']} "
+            f"(project-specific skipped: {res['promoted_skipped_project_specific']})"
+        )
         print(f"  Total project rows: {res['total_project_rows']}")
         for c in res["conflicts"]:
             print(f"  CONFLICT ({c['term']}): existing='{c['existing_preferred']}' vs incoming='{c['incoming_preferred']}'")
@@ -2652,14 +3799,87 @@ def _check_unclosed_code_fences(text: str) -> bool:
     return (fence_count % 2) != 0
 
 
+def _read_brief_context(workspace: Path) -> Dict[str, str]:
+    """Read source_lang, target_lang, and inferred domain from translation-brief.md."""
+    info = {"source_lang": "", "target_lang": "", "domain": "all"}
+    brief = workspace / "translation-brief.md"
+    if not brief.is_file():
+        return info
+    txt = brief.read_text(encoding="utf-8", errors="replace")
+    for line in txt.splitlines():
+        m_src = re.match(r"^\s*-\s*Source language:\s*(.+)$", line, re.IGNORECASE)
+        if m_src and m_src.group(1).strip():
+            pref, _ = resolve_lang_info(m_src.group(1).strip())
+            info["source_lang"] = pref
+        m_tgt = re.match(r"^\s*-\s*Target language:\s*(.+)$", line, re.IGNORECASE)
+        if m_tgt and m_tgt.group(1).strip():
+            pref, _ = resolve_lang_info(m_tgt.group(1).strip())
+            info["target_lang"] = pref
+
+    low = txt.lower()
+    if any(k in low for k in ("legal", "contract", "privacy policy", "statute", "compliance")):
+        info["domain"] = "legal"
+    elif any(k in low for k in ("technical", "api", "software", "kubernetes", "devops", "engineering", "manual")):
+        info["domain"] = "technical"
+    elif any(k in low for k in ("fiction", "novel", "fantasy", "wuxia", "xianxia", "story")):
+        info["domain"] = "fiction"
+    return info
+
+
+def _check_dossier_completeness(workspace: Path) -> bool:
+    """Return True if research-dossier.md has Phase 3 classification and mindset/audit content."""
+    dossier_path = workspace / "research-dossier.md"
+    if not dossier_path.is_file():
+        return False
+    text = dossier_path.read_text(encoding="utf-8", errors="replace")
+    m_status = re.search(r"(?mi)^[ \t]*-[ \t]*prior_translation_status:[ \t]*(\S[^\r\n]*)$", text)
+    has_status = bool(m_status and not m_status.group(1).strip().startswith("<"))
+    m_mind = re.search(r"(?mi)^[ \t]*-[ \t]*mindset_summary:[ \t]*(\S[^\r\n]*)$", text)
+    has_mindset = bool(m_mind and not m_mind.group(1).strip().startswith("<"))
+    has_audit_row = False
+    in_audit = False
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("## Existing Translations Audit"):
+            in_audit = True
+            continue
+        if in_audit and s.startswith("## "):
+            break
+        if in_audit and s.startswith("|") and not s.startswith("| Edition") and not re.match(r"^\|[\s|-]+\|$", s):
+            cells = [c.strip() for c in s.strip("|").split("|") if c.strip()]
+            if cells:
+                has_audit_row = True
+                break
+    return has_status and (has_mindset or has_audit_row)
+
+
+def _strip_code_and_anchors(text: str) -> str:
+    s = _strip_block_anchors(text)
+    s = re.sub(r"(?s)(?:```|~~~).*?(?:```|~~~)", " ", s)
+    return s
+
+
+def _extract_prose_numbers(text: str) -> Set[str]:
+    """Extract normalized multi-digit / decimal / percentage numbers from prose (outside code/headings/URLs)."""
+    s = _strip_code_and_anchors(text)
+    s = re.sub(r"(?m)^\s*#{1,6}\s+.*$", " ", s)
+    s = re.sub(r"`[^`\n]+`", " ", s)
+    s = re.sub(r"\]\([^)]+\)", "]", s)
+    s = re.sub(r"https?://\S+", " ", s)
+    raw_nums = re.findall(r"\b\d{2,}(?:[.,]\d+)*%?\b|\b\d+[.,]\d+%?\b", s)
+    return {re.sub(r"[.,]", "", num) for num in raw_nums}
+
+
 def run_verify(
     workspace: Path,
-    min_word_ratio: float = 0.65,
-    max_word_ratio: float = 2.5,
+    min_word_ratio: Optional[float] = None,
+    max_word_ratio: Optional[float] = None,
     min_char_ratio: float = 0.5,
     strict: bool = False,
+    require_dossier: bool = False,
+    enforce_glossary: bool = False,
 ) -> Dict[str, Any]:
-    """Run all four deterministic verification checks and return structured findings."""
+    """Run deterministic completeness, parity, dossier, formal-data, script-leakage, locale, and glossary checks."""
     errors: List[Dict[str, str]] = []
     warnings: List[Dict[str, str]] = []
     chunk_metrics: List[Dict[str, Any]] = []
@@ -2673,15 +3893,45 @@ def run_verify(
         else:
             warnings.append(item)
 
+    brief_ctx = _read_brief_context(workspace)
+    src_lang = brief_ctx["source_lang"]
+    tgt_lang = brief_ctx["target_lang"]
+    inferred_domain = brief_ctx["domain"]
+
+    if min_word_ratio is None:
+        min_word_ratio = 0.48 if (src_lang == "vi" and tgt_lang in {"en", "fr", "de", "es"}) else 0.65
+    if max_word_ratio is None:
+        max_word_ratio = 2.8 if (tgt_lang == "vi" and src_lang != "vi") else 2.5
+
+    dossier_complete = _check_dossier_completeness(workspace)
+    if require_dossier and not dossier_complete:
+        add_finding(
+            "error",
+            "dossier",
+            "Research_Dossier (research-dossier.md) is incomplete: missing prior_translation_status or mindset/audit entries",
+        )
+
     manifest_path = workspace / "chunk-manifest.csv"
     if not manifest_path.is_file():
         add_finding("error", "completeness", "Missing chunk-manifest.csv")
-        return {"passed": False, "errors": errors, "warnings": warnings, "chunk_metrics": chunk_metrics}
+        return {
+            "passed": False,
+            "dossier_complete": dossier_complete,
+            "errors": errors,
+            "warnings": warnings,
+            "chunk_metrics": chunk_metrics,
+        }
 
     manifest_rows = read_csv_rows(manifest_path, MANIFEST_HEADER)
     if not manifest_rows:
         add_finding("error", "completeness", "chunk-manifest.csv contains no chunk rows")
-        return {"passed": False, "errors": errors, "warnings": warnings, "chunk_metrics": chunk_metrics}
+        return {
+            "passed": False,
+            "dossier_complete": dossier_complete,
+            "errors": errors,
+            "warnings": warnings,
+            "chunk_metrics": chunk_metrics,
+        }
 
     meta_by_id: Dict[str, Dict[str, Any]] = {}
     meta_path = workspace / ".book-scan-meta.json"
@@ -2703,23 +3953,34 @@ def run_verify(
 
     # Pre-compile forbidden & approved glossary matchers
     forbidden_matchers: List[Tuple[str, str, re.Pattern]] = []
-    approved_matchers: List[Tuple[str, re.Pattern, List[Tuple[str, re.Pattern]]]] = []
+    approved_matchers: List[Tuple[str, bool, re.Pattern, List[Tuple[str, re.Pattern]]]] = []
     for gr in glossary_rows:
         term = gr.get("term", "").strip()
         pref = gr.get("preferred_translation", "").strip()
         forb_raw = gr.get("forbidden_translation", "").strip()
+        src_loc = gr.get("source_location", "").strip().lower()
+        is_mem_seed = src_loc == "memory-seed"
+
         if forb_raw:
             for forb in forb_raw.split(";"):
                 f_clean = forb.strip()
                 if f_clean:
                     forbidden_matchers.append((term, f_clean, _phrase_pattern(f_clean)))
         if gr.get("status", "").lower() == "approved" and term and pref:
+            if is_mem_seed and inferred_domain != "all" and not _row_matches_domain(gr, inferred_domain):
+                continue
             pref_variants = [p.strip() for p in pref.split(";") if p.strip()]
             approved_matchers.append((
                 term,
+                is_mem_seed,
                 _phrase_pattern(term),
                 [(pv, _phrase_pattern(pv)) for pv in pref_variants],
             ))
+
+    term_applied_chunks: Dict[str, List[str]] = {}
+    term_missing_chunks: Dict[str, List[Tuple[str, str]]] = {}
+    vi_dialogue_styles: Dict[str, Set[str]] = {"em_dash": set(), "double_quote": set()}
+    non_cjk_targets = {"vi", "en", "fr", "de", "es"}
 
     for row in manifest_rows:
         cid = row.get("chunk_id", "").strip()
@@ -2741,7 +4002,7 @@ def run_verify(
             continue
 
         target_text = out_path.read_text(encoding="utf-8", errors="replace")
-        if not target_text.strip():
+        if not _strip_block_anchors(target_text).strip():
             add_finding("error", "completeness", f"Translated output file is empty: {out_rel}", cid)
             continue
 
@@ -2750,7 +4011,6 @@ def run_verify(
         t_paras = count_paragraphs(target_text)
         t_headings = count_headings(target_text)
 
-        # Load source metrics & source text if available
         meta = meta_by_id.get(cid, {})
         source_text = ""
         src_chunk_rel = meta.get("source_chunk_path") or f"source_chunks/{cid}.md"
@@ -2844,11 +4104,15 @@ def run_verify(
                 )
 
         if source_text:
-            for term, term_re, pref_patterns in approved_matchers:
-                if term_re.search(source_text):
-                    if not any(pr.search(target_text) for _, pr in pref_patterns):
-                        lvl = "error" if strict else "warning"
+            s_no_anchors = _strip_block_anchors(source_text)
+            for term, is_mem_seed, term_re, pref_patterns in approved_matchers:
+                if term_re.search(s_no_anchors):
+                    if any(pr.search(target_text) for _, pr in pref_patterns):
+                        term_applied_chunks.setdefault(term, []).append(cid)
+                    else:
                         expected_str = " / ".join(pv for pv, _ in pref_patterns)
+                        term_missing_chunks.setdefault(term, []).append((cid, expected_str))
+                        lvl = "error" if (strict or (enforce_glossary and not is_mem_seed)) else "warning"
                         add_finding(
                             lvl,
                             "glossary",
@@ -2856,9 +4120,91 @@ def run_verify(
                             cid,
                         )
 
+            # Check 5: Formal Data Parity (URLs, EPUB anchors, multi-digit numbers)
+            s_clean = _strip_code_and_anchors(source_text)
+            src_urls = {u.rstrip(".,;:!?") for u in re.findall(r"https?://[^\s)>\]\"'`]+", s_clean)}
+            for url in sorted(src_urls):
+                if url not in target_text:
+                    add_finding("error", "formal-data", f"Source URL missing in target output: {url}", cid)
+
+            if meta.get("epub_href"):
+                src_fn_refs = set(re.findall(r"\]\(([^)\s]+#[A-Za-z0-9_.-]+)\)", s_clean))
+                for ref_href in sorted(src_fn_refs):
+                    if ref_href not in target_text:
+                        lvl = "error" if strict else "warning"
+                        add_finding(lvl, "formal-data", f"EPUB inline link target missing: {ref_href}", cid)
+
+            s_nums = _extract_prose_numbers(source_text)
+            t_nums = _extract_prose_numbers(target_text)
+            missing_nums = sorted(s_nums - t_nums)
+            if missing_nums:
+                lvl = "error" if strict else "warning"
+                add_finding(
+                    lvl,
+                    "formal-data",
+                    f"Numeric value(s) from source missing in target: {', '.join(missing_nums[:5])}",
+                    cid,
+                )
+
+        # Check 6: Untranslated CJK Script Leakage (for non-CJK target languages)
+        if tgt_lang in non_cjk_targets:
+            t_leak_scan = _strip_code_and_anchors(target_text)
+            t_leak_scan = re.sub(r"`[^`\n]+`", " ", t_leak_scan)
+            t_leak_scan = re.sub(r"\([^)\n]{1,45}\)", " ", t_leak_scan)
+            m_cjk = re.search(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]{2,}", t_leak_scan)
+            if m_cjk:
+                add_finding(
+                    "error",
+                    "script-leakage",
+                    f"Untranslated CJK script detected in '{tgt_lang}' output: '{m_cjk.group(0)[:20]}'",
+                    cid,
+                )
+
+        # Check 7: Vietnamese Locale Linter
+        if tgt_lang == "vi":
+            t_no_code = _strip_code_and_anchors(target_text)
+            em_lines = len(re.findall(r"(?m)^\s*[—–]\s+\S", t_no_code))
+            quote_paras = len(re.findall(r'(?m)^\s*[“"][^”"\n]{15,}[”"]', t_no_code))
+            if em_lines >= 2 and quote_paras == 0:
+                vi_dialogue_styles["em_dash"].add(cid)
+            elif quote_paras >= 2 and em_lines == 0:
+                vi_dialogue_styles["double_quote"].add(cid)
+
+            calques = (
+                len(re.findall(r"\bmột cách\s+\w+", t_no_code, re.IGNORECASE))
+                + len(re.findall(r"\b(?:bị|được)\s+\w+(?:\s+\w+)?\s+bởi\b", t_no_code, re.IGNORECASE))
+                + len(re.findall(r"\bđã và đang\b", t_no_code, re.IGNORECASE))
+            )
+            if calques >= 5 and (calques / max(1, t_words)) > 0.025:
+                add_finding(
+                    "warning",
+                    "locale-vi",
+                    f"High anti-translatorese calque density ({calques} occurrences in {t_words} words)",
+                    cid,
+                )
+
+    # Retroactive cross-chunk glossary drift summary warning
+    for term, applied_cids in term_applied_chunks.items():
+        if term in term_missing_chunks and applied_cids:
+            missed = [cid for cid, _exp in term_missing_chunks[term]]
+            add_finding(
+                "warning",
+                "glossary-drift",
+                f"Retroactive drift on '{term}': applied in {applied_cids[0]} but missed in {', '.join(missed[:5])}",
+            )
+
+    if tgt_lang == "vi" and vi_dialogue_styles["em_dash"] and vi_dialogue_styles["double_quote"]:
+        add_finding(
+            "warning",
+            "locale-vi",
+            f"Mixed Vietnamese dialogue punctuation across chunks: em-dash in "
+            f"{sorted(vi_dialogue_styles['em_dash'])[:3]} vs quoted in {sorted(vi_dialogue_styles['double_quote'])[:3]}",
+        )
+
     return {
         "passed": len(errors) == 0,
         "total_chunks": len(manifest_rows),
+        "dossier_complete": dossier_complete,
         "errors": errors,
         "warnings": warnings,
         "chunk_metrics": chunk_metrics,
@@ -2877,6 +4223,8 @@ def cmd_verify(args: argparse.Namespace, pack_root: Path) -> int:
         max_word_ratio=args.max_word_ratio,
         min_char_ratio=args.min_char_ratio,
         strict=args.strict,
+        require_dossier=args.require_dossier,
+        enforce_glossary=args.enforce_glossary,
     )
 
     if args.json:
@@ -2979,7 +4327,7 @@ def _write_merged_format(
         parts: List[str] = []
         if toc_lines:
             parts.append("## Table of Contents\n\n" + "\n".join(toc_lines) + "\n\n---")
-        parts.extend(chunk_texts)
+        parts.extend(_strip_block_anchors(ct) for ct in chunk_texts)
         target_path.write_text("\n\n".join(parts).rstrip() + "\n", encoding="utf-8")
     return target_path
 
@@ -2994,7 +4342,11 @@ def cmd_merge(args: argparse.Namespace, pack_root: Path) -> int:
 
     verify_res: Optional[Dict[str, Any]] = None
     if not args.no_verify:
-        verify_res = run_verify(workspace=workspace)
+        verify_res = run_verify(
+            workspace=workspace,
+            require_dossier=getattr(args, "require_dossier", False),
+            enforce_glossary=getattr(args, "enforce_glossary", False),
+        )
         if not verify_res["passed"]:
             if args.json:
                 print(json.dumps({"command": "merge", "merged": False, "verify": verify_res}, indent=2, ensure_ascii=False))
@@ -3166,6 +4518,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--mode", default=None, help="Translation mode override")
     p_init.add_argument("--audience", default=None, help="Target audience description")
     p_init.add_argument("--output-format", default=None, help="Output format preference (e.g., 'txt, epub')")
+    p_init.add_argument("--domain", choices=["all", "fiction", "technical", "legal", "general"], default="all", help="Seed domain filter for Tier-1 glossary memory")
 
     p_convert = subparsers.add_parser("convert", parents=[common], help="Convert PDF/document to EPUB and/or plain TXT")
     p_convert.add_argument("--source", required=True, help="Source PDF, EPUB, HTML, Markdown, TXT, or directory")
@@ -3182,19 +4535,36 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan.add_argument("--workspace", required=True, help="Workspace directory path")
     p_scan.add_argument("--max-words", type=int, default=1500, help="Max words per chunk (default: 1500)")
 
+    p_mine = subparsers.add_parser("mine-terms", parents=[common], help="Mine recurring entities, acronyms, and special terms across chunks")
+    p_mine.add_argument("--workspace", required=True, help="Workspace directory path")
+    p_mine.add_argument("--top", type=int, default=200, help="Maximum candidates to return (default: 200)")
+    p_mine.add_argument("--min-freq", type=int, default=2, help="Minimum corpus frequency (default: 2)")
+
+    p_bundle = subparsers.add_parser("bundle-chunk", parents=[common], help="Build a scoped worker packet for one chunk")
+    p_bundle.add_argument("--workspace", required=True, help="Workspace directory path")
+    p_bundle.add_argument("--chunk", required=True, help="Chunk ID from chunk-manifest.csv")
+    p_bundle.add_argument("--role", choices=["chunk-translator", "fidelity-reviewer", "continuity-reviewer", "formatting-reviewer"], default="chunk-translator", help="Target worker role")
+    p_bundle.add_argument("--out", default=None, help="Optional output packet file path")
+
     p_sync = subparsers.add_parser("sync-glossary", parents=[common], help="Sync glossary with memory and worker inbox")
     p_sync.add_argument("--workspace", required=True, help="Workspace directory path")
     p_sync.add_argument("--memory", default=None, help="Explicit Tier-1 memory CSV path")
     p_sync.add_argument("--seed", action="store_true", help="Import approved entries from Tier-1 memory CSV")
     p_sync.add_argument("--promote", action="store_true", help="Promote approved high-confidence rows to memory CSV")
     p_sync.add_argument("--target-lang", default=None, help="Target language for auto-detecting memory CSV")
+    p_sync.add_argument("--domain", choices=["all", "fiction", "technical", "legal", "general"], default="all", help="Filter seeded memory rows by book domain")
+    p_sync.add_argument("--filter-to-source", action="store_true", help="Prune memory-seed rows whose term never appears in source_chunks/")
+    p_sync.add_argument("--approve-clean", action="store_true", help="Auto-approve non-conflicting high/medium confidence inbox proposals")
+    p_sync.add_argument("--include-proper-nouns", action="store_true", help="Allow --promote to export proper-name/project-specific entities")
 
-    p_verify = subparsers.add_parser("verify", parents=[common], help="Verify 100%% coverage, parity, and glossary rules")
+    p_verify = subparsers.add_parser("verify", parents=[common], help="Verify 100%% coverage, parity, dossier, formal data, and glossary rules")
     p_verify.add_argument("--workspace", required=True, help="Workspace directory path")
-    p_verify.add_argument("--min-word-ratio", type=float, default=0.65, help="Minimum target/source word ratio")
-    p_verify.add_argument("--max-word-ratio", type=float, default=2.5, help="Maximum target/source word ratio")
+    p_verify.add_argument("--min-word-ratio", type=float, default=None, help="Minimum target/source word ratio (auto-calibrated by language pair if omitted)")
+    p_verify.add_argument("--max-word-ratio", type=float, default=None, help="Maximum target/source word ratio (auto-calibrated by language pair if omitted)")
     p_verify.add_argument("--min-char-ratio", type=float, default=0.5, help="Minimum char ratio for no-space scripts")
     p_verify.add_argument("--strict", action="store_true", help="Escalate warnings to errors")
+    p_verify.add_argument("--require-dossier", action="store_true", help="Fail if research-dossier.md is incomplete")
+    p_verify.add_argument("--enforce-glossary", action="store_true", help="Treat missing project-approved glossary renderings as errors")
 
     p_merge = subparsers.add_parser("merge", parents=[common], help="Verify and merge translated chunks")
     p_merge.add_argument("--workspace", required=True, help="Workspace directory path")
@@ -3205,6 +4575,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_merge.add_argument("--author", default=None, help="Author metadata (for EPUB)")
     p_merge.add_argument("--lang", default=None, help="Target language code (for EPUB)")
     p_merge.add_argument("--no-verify", action="store_true", help="Skip pre-merge verify check")
+    p_merge.add_argument("--require-dossier", action="store_true", help="Require complete research-dossier.md during pre-merge verify")
+    p_merge.add_argument("--enforce-glossary", action="store_true", help="Enforce project-approved glossary renderings during pre-merge verify")
 
     return parser
 
@@ -3218,6 +4590,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "init": cmd_init,
         "convert": cmd_convert,
         "scan": cmd_scan,
+        "mine-terms": cmd_mine_terms,
+        "bundle-chunk": cmd_bundle_chunk,
         "sync-glossary": cmd_sync_glossary,
         "verify": cmd_verify,
         "merge": cmd_merge,

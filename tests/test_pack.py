@@ -1096,6 +1096,349 @@ class PackSmokeTests(unittest.TestCase):
                 self.assertIn("<dc:language>vi</dc:language>", out_opf)
                 self.assertIn("Chiếc Đồng Hồ Bạc", out_opf)
 
+    def test_epub_anchor_locked_footnotes_links_and_paragraph_splits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            src_epub = tmp_path / "anchored_book.epub"
+            ws = tmp_path / "ws-anchored"
+
+            container_xml = (
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                "<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n"
+                "  <rootfiles><rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/></rootfiles>\n"
+                "</container>\n"
+            )
+            opf_xml = (
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                "<package xmlns=\"http://www.idpf.org/2007/opf\" unique-identifier=\"bookid\" version=\"3.0\">\n"
+                "  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+                "    <dc:identifier id=\"bookid\">urn:uuid:aaaa-bbbb-cccc</dc:identifier>\n"
+                "    <dc:title>Anchored Tales</dc:title>\n"
+                "    <dc:language>en</dc:language>\n"
+                "  </metadata>\n"
+                "  <manifest>\n"
+                "    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n"
+                "    <item id=\"ch1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n"
+                "  </manifest>\n"
+                "  <spine><itemref idref=\"ch1\"/></spine>\n"
+                "</package>\n"
+            )
+            nav_xhtml = (
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                "<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n"
+                "<head><title>TOC</title></head>\n"
+                "<body><nav epub:type=\"toc\"><ol><li><a href=\"ch1.xhtml\">Chapter 1</a></li></ol></nav></body>\n"
+                "</html>\n"
+            )
+            ch1_xhtml = (
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                "<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n"
+                "<head><title>Chapter 1</title></head>\n"
+                "<body>\n"
+                "  <h1 class=\"ch-title\">Chapter 1: Harbor Bell</h1>\n"
+                "  <p id=\"p1\" class=\"dialogue-para\">\"Wait!\" Mara called out.<a id=\"ref1\" href=\"notes.xhtml#fn1\" epub:type=\"noteref\"><sup>1</sup></a> \"Let us board the ship now.\"</p>\n"
+                "  <h2 class=\"subhead\">Part Two: The Ledger</h2>\n"
+                "  <table class=\"data-grid\"><tr><th>Item</th><td>Brass Compass</td></tr></table>\n"
+                "</body>\n"
+                "</html>\n"
+            )
+
+            with zipfile.ZipFile(src_epub, "w") as zf:
+                zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+                zf.writestr("META-INF/container.xml", container_xml)
+                zf.writestr("OEBPS/content.opf", opf_xml)
+                zf.writestr("OEBPS/nav.xhtml", nav_xhtml)
+                zf.writestr("OEBPS/ch1.xhtml", ch1_xhtml)
+
+            run_command(PYTHON, BOOK_OPS, "init", "--source", src_epub, "--target-lang", "vi", "--workspace", ws)
+            run_command(PYTHON, BOOK_OPS, "scan", "--source", src_epub, "--workspace", ws, "--max-words", "1000")
+
+            manifest_path = ws / "chunk-manifest.csv"
+            with manifest_path.open("r", encoding="utf-8", newline="") as f:
+                manifest_rows = list(csv.DictReader(f))
+                fieldnames = list(manifest_rows[0].keys())
+
+            cid = manifest_rows[0]["chunk_id"]
+            src_chunk = (ws / "source_chunks" / f"{cid}.md").read_text(encoding="utf-8")
+            self.assertIn("<!-- @b0 -->", src_chunk)
+            self.assertIn("[1](notes.xhtml#fn1)", src_chunk)
+
+            # Split @b1 into 3 dialogue lines! Without anchor locking, @b2 <h2 class="subhead"> would break.
+            translated_chunk = (
+                "<!-- @b0 -->\n"
+                "# Chương 1: Tiếng Chuông Bến Cảng\n\n"
+                "<!-- @b1 -->\n"
+                "— Khoan đã![1](notes.xhtml#fn1)\n\n"
+                "— Mara gọi lớn giữa làn sương.\n\n"
+                "— Chúng ta lên tàu ngay bây giờ thôi.\n\n"
+                "<!-- @b2 -->\n"
+                "## Phần Hai: Cuốn Sổ Cái\n\n"
+                "<!-- @b3 -->\n"
+                "Vật phẩm\n\n"
+                "<!-- @b4 -->\n"
+                "La bàn bằng đồng\n"
+            )
+            out_file = ws / manifest_rows[0]["output_path"]
+            out_file.write_text(translated_chunk, encoding="utf-8")
+            manifest_rows[0]["status"] = "done"
+            manifest_rows[0]["qa_status"] = "passed"
+            with manifest_path.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+                writer.writeheader()
+                writer.writerows(manifest_rows)
+
+            verify_res = run_command(PYTHON, BOOK_OPS, "verify", "--workspace", ws, "--strict", "--json")
+            self.assertTrue(json.loads(verify_res.stdout)["passed"])
+
+            out_epub = ws / "out_anchored.epub"
+            run_command(PYTHON, BOOK_OPS, "merge", "--workspace", ws, "--out", out_epub, "--title", "Truyện Neo Khối")
+
+            with zipfile.ZipFile(out_epub, "r") as zf:
+                rebuilt = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+                self.assertIn('<h2 class="subhead">Phần Hai: Cuốn Sổ Cái</h2>', rebuilt)
+                self.assertIn('<a id="ref1" href="notes.xhtml#fn1" epub:type="noteref"><sup>1</sup></a>', rebuilt)
+                self.assertEqual(rebuilt.count('id="p1"'), 1)  # only original p1 keeps id="p1"
+                self.assertEqual(rebuilt.count('class="dialogue-para"'), 3)
+                self.assertIn('<th>Vật phẩm</th><td>La bàn bằng đồng</td>', rebuilt)
+                self.assertNotIn("@b0", rebuilt)
+
+    def test_pdf_dynamic_alternating_headers_and_footnotes(self):
+        def _build_pdf(pages_lines):
+            def _esc(s):
+                return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+            objects = []
+            page_ids = [4 + i * 2 for i in range(len(pages_lines))]
+            objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+            kids = " ".join(f"{pid} 0 R" for pid in page_ids).encode("ascii")
+            objects.append(b"<< /Type /Pages /Kids [ " + kids + f" ] /Count {len(page_ids)} >>".encode("ascii"))
+            objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+            for idx, lines in enumerate(pages_lines):
+                p_id = page_ids[idx]
+                c_id = p_id + 1
+                objects.append(
+                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                    f"/Resources << /Font << /F1 3 0 R >> >> /Contents {c_id} 0 R >>".encode("ascii")
+                )
+                cmds = ["BT", "/F1 12 Tf", "72 720 Td", "16 TL"]
+                for ln in lines:
+                    cmds.append(f"({_esc(ln)}) Tj T*")
+                cmds.append("ET")
+                sb = "\n".join(cmds).encode("latin-1")
+                objects.append(f"<< /Length {len(sb)} >>\nstream\n".encode("ascii") + sb + b"\nendstream")
+            out = bytearray(b"%PDF-1.4\n")
+            offs = [0]
+            for num, body in enumerate(objects, 1):
+                offs.append(len(out))
+                out.extend(f"{num} 0 obj\n".encode("ascii") + body + b"\nendobj\n")
+            xp = len(out)
+            out.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
+            for off in offs[1:]:
+                out.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+            out.extend(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF\n".encode("ascii"))
+            return bytes(out)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            pdf_file = tmp_path / "alternating.pdf"
+            pdf_file.write_bytes(_build_pdf([
+                ["10 | DUNE ARCHIVE", "Chapter 1: The Desert", "Paul walked through the courtyard before", "[1] Imperial desert survey record."],
+                ["DUNE ARCHIVE | 11", "sunrise while sand swept across the stone wall."],
+                ["12 | DUNE ARCHIVE", "Chapter 2: The Water Vault", "Deep beneath the rock lay the sealed reservoir."],
+                ["DUNE ARCHIVE | 13", "Guards inspected the cistern gauges at noon."],
+            ]))
+            conv_txt = tmp_path / "out.txt"
+            run_command(PYTHON, BOOK_OPS, "convert", "--source", pdf_file, "--out", conv_txt)
+            txt = conv_txt.read_text(encoding="utf-8")
+            self.assertNotIn("DUNE ARCHIVE", txt)
+            self.assertIn("Paul walked through the courtyard before sunrise", txt)
+            self.assertIn("[1] Imperial desert survey record.", txt)
+
+    def test_mine_terms_and_bundle_chunk_pipeline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            src = tmp_path / "novel.md"
+            src.write_text(
+                "# Chapter 1\n\n"
+                "Kael Morrow walked into Silver Spire carrying the NDA contract for the SSOT ledger.\n\n"
+                "# Chapter 2\n\n"
+                "Inside Silver Spire, Kael Morrow reviewed the SSOT protocol alongside the High Council.\n",
+                encoding="utf-8",
+            )
+            ws = tmp_path / "ws-mine"
+            run_command(PYTHON, BOOK_OPS, "init", "--source", src, "--target-lang", "vi", "--workspace", ws)
+            scan_res = run_command(PYTHON, BOOK_OPS, "scan", "--source", src, "--workspace", ws, "--json")
+            scan_data = json.loads(scan_res.stdout)
+            self.assertGreater(scan_data["candidate_terms_count"], 0)
+            cand_payload = json.loads((ws / "candidate-terms.json").read_text(encoding="utf-8"))
+            cand_terms = {c["term"] for c in cand_payload["candidates"]}
+            self.assertIn("Kael Morrow", cand_terms)
+            self.assertIn("Silver Spire", cand_terms)
+            self.assertIn("SSOT", cand_terms)
+            self.assertIn("## Recurring Entities & Candidate Terms", (ws / "source-map.md").read_text(encoding="utf-8"))
+
+            bundle_res = run_command(
+                PYTHON, BOOK_OPS, "bundle-chunk",
+                "--workspace", ws,
+                "--chunk", "chunk-002",
+                "--role", "chunk-translator",
+                "--json",
+            )
+            b_data = json.loads(bundle_res.stdout)
+            pkt_text = Path(b_data["packet_path"]).read_text(encoding="utf-8")
+            self.assertIn("WORKER CONTRACT CARD", pkt_text)
+            self.assertIn("High Council", pkt_text)
+            self.assertNotIn("Non-disclosure agreement", pkt_text)  # irrelevant terms filtered out
+
+    def test_glossary_domain_filtering_promote_guard_and_ledger_bridge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            mem_copy = tmp_path / "memory-vi.csv"
+            shutil.copy2(REPO_ROOT / "memory" / "glossary-vi.csv", mem_copy)
+
+            src = tmp_path / "manual.md"
+            src.write_text(
+                "# Overview\n\n"
+                "Ensure Idempotency and a Single source of truth across API nodes.\n",
+                encoding="utf-8",
+            )
+            ws = tmp_path / "ws-tech"
+            init_res = run_command(
+                PYTHON, BOOK_OPS, "init",
+                "--source", src,
+                "--target-lang", "vi",
+                "--domain", "technical",
+                "--workspace", ws,
+                "--json",
+            )
+            init_data = json.loads(init_res.stdout)
+            self.assertLess(init_data["seeded_glossary_rows"], 44)  # fantasy lore / legal excluded
+
+            run_command(PYTHON, BOOK_OPS, "scan", "--source", src, "--workspace", ws)
+
+            # Prune unused memory-seed rows + test inbox auto-approve + ledger sync + guarded promote
+            (ws / "evidence-ledger.jsonl").write_text(
+                json.dumps({
+                    "claim_id": "C001",
+                    "sub_question": "Canonical Vietnamese term for Idempotency",
+                    "source_title": "Vietnamese CS Glossary",
+                    "source_url": "https://example.org/cs-glossary",
+                    "source_type": "official",
+                    "date_accessed": "2026-11-17",
+                    "access_method": "fetch",
+                    "evidence": "Standard academic Vietnamese term is Tính lũy đẳng.",
+                    "confidence": "high",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            (ws / "glossary-inbox.jsonl").write_text(
+                "\n".join([
+                    json.dumps({
+                        "term": "Zyrath",
+                        "preferred_translation": "Zyrath",
+                        "term_class": "proper-name",
+                        "context": "novel character",
+                        "confidence": "high",
+                    }),
+                    json.dumps({
+                        "term": "Circuit breaker",
+                        "preferred_translation": "Bộ ngắt mạch",
+                        "term_class": "technical-term",
+                        "context": "distributed resilience pattern",
+                        "confidence": "high",
+                    }),
+                ]) + "\n",
+                encoding="utf-8",
+            )
+
+            sync_res = run_command(
+                PYTHON, BOOK_OPS, "sync-glossary",
+                "--workspace", ws,
+                "--memory", mem_copy,
+                "--filter-to-source",
+                "--approve-clean",
+                "--promote",
+                "--json",
+            )
+            sync_data = json.loads(sync_res.stdout)
+            self.assertGreater(sync_data["pruned_unused"], 0)
+            self.assertEqual(sync_data["promoted"], 1)  # Circuit breaker promoted
+            self.assertEqual(sync_data["promoted_skipped_project_specific"], 1)  # Zyrath skipped
+            self.assertEqual(sync_data["ledger_sync"]["added_to_csv"], 1)
+
+            with mem_copy.open("r", encoding="utf-8", newline="") as f:
+                mem_terms = {r["term"] for r in csv.DictReader(f)}
+            self.assertIn("Circuit breaker", mem_terms)
+            self.assertNotIn("Zyrath", mem_terms)
+            with (ws / "evidence-ledger.csv").open("r", encoding="utf-8", newline="") as f:
+                csv_rows = list(csv.DictReader(f))
+                self.assertEqual(len(csv_rows), 1)
+                self.assertEqual(csv_rows[0]["claim_id"], "C001")
+
+    def test_verify_formal_data_script_leakage_dossier_and_vi_locale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            src = tmp_path / "article.md"
+            src.write_text(
+                "# Chapter 1\n\n"
+                "Visit https://example.org/docs for version 2026 metrics.\n\n"
+                "# Chapter 2\n\n"
+                "Dialogue scene two.\n",
+                encoding="utf-8",
+            )
+            ws = tmp_path / "ws-qa"
+            run_command(PYTHON, BOOK_OPS, "init", "--source", src, "--target-lang", "vi", "--workspace", ws)
+            run_command(PYTHON, BOOK_OPS, "scan", "--source", src, "--workspace", ws)
+
+            manifest_path = ws / "chunk-manifest.csv"
+            with manifest_path.open("r", encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+                fieldnames = list(rows[0].keys())
+
+            (ws / rows[0]["output_path"]).write_text(
+                "# Chương 1\n\n"
+                "Truy cập tài liệu phiên bản 2026 tại đây với ký tự sót lại 汉字 chưa được dịch.\n\n"
+                "— Chào bạn.\n\n— Hẹn gặp lại.\n",
+                encoding="utf-8",
+            )
+            (ws / rows[1]["output_path"]).write_text(
+                "# Chương 2\n\n"
+                "“Đây là một đoạn hội thoại dài hơn mười lăm ký tự dùng ngoặc kép.”\n\n"
+                "“Và đây là câu thứ hai cũng dùng ngoặc kép.”\n",
+                encoding="utf-8",
+            )
+            for r in rows:
+                r["status"] = "done"
+            with manifest_path.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+                w.writeheader()
+                w.writerows(rows)
+
+            res = run_command(
+                PYTHON, BOOK_OPS, "verify",
+                "--workspace", ws,
+                "--require-dossier",
+                "--json",
+                check=False,
+            )
+            self.assertNotEqual(res.returncode, 0)
+            data = json.loads(res.stdout)
+            err_checks = {e["check"] for e in data["errors"]}
+            warn_checks = {w["check"] for w in data["warnings"]}
+            self.assertIn("dossier", err_checks)
+            self.assertIn("formal-data", err_checks)  # missing https://example.org/docs
+            self.assertIn("script-leakage", err_checks)  # leaked CJK 汉字
+            self.assertIn("locale-vi", warn_checks)  # mixed em-dash vs double-quote dialogue
+
+    def test_validator_c24_accented_vietnamese_locale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_copy = Path(tmp) / "repo"
+            copy_repo_without_git(repo_copy)
+            vi_file = repo_copy / "core" / "locales" / "vi-VN.md"
+            vi_file.write_text("# Locale\nPronoun Sino-Vietnamese Anti-Translatorese Typography\ntoi/ban\n", encoding="utf-8")
+            res = run_command(PYTHON, VALIDATE, repo_copy, check=False)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("C24", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -545,8 +545,12 @@ def check_c8_utf8_encoding(root: Path) -> List[Finding]:
             except OSError:
                 continue
 
-            # Non-ASCII warning for core/ files only
-            if rel.startswith("core/") and filepath.suffix in (".md", ".mdc"):
+            # Non-ASCII warning for core/ files (exempt core/locales/ native orthography)
+            if (
+                rel.startswith("core/")
+                and not rel.startswith("core/locales/")
+                and filepath.suffix in (".md", ".mdc")
+            ):
                 total_chars = len(text)
                 if total_chars > 0:
                     non_ascii = sum(1 for c in text if ord(c) > 127)
@@ -1444,7 +1448,7 @@ def check_c22_shared_glossary_memory(root: Path) -> List[Finding]:
 def check_c23_book_ops_cli(root: Path) -> List[Finding]:
     """
     C23: When scripts/ exists (source root or built destination), scripts/book_ops.py
-    must exist, compile cleanly, and define all 5 subcommands.
+    must exist, compile cleanly, and define all 8 subcommands.
     """
     findings: List[Finding] = []
     scripts_dir = root / "scripts"
@@ -1479,7 +1483,16 @@ def check_c23_book_ops_cli(root: Path) -> List[Finding]:
             "scripts/book_ops.py",
         ))
 
-    required_subcommands = ("init", "convert", "scan", "sync-glossary", "verify", "merge")
+    required_subcommands = (
+        "init",
+        "convert",
+        "scan",
+        "mine-terms",
+        "bundle-chunk",
+        "sync-glossary",
+        "verify",
+        "merge",
+    )
     missing = [
         cmd for cmd in required_subcommands
         if f'"{cmd}"' not in text and f"'{cmd}'" not in text
@@ -1490,6 +1503,56 @@ def check_c23_book_ops_cli(root: Path) -> List[Finding]:
             f"scripts/book_ops.py missing subcommand definition(s): {', '.join(missing)}",
             "scripts/book_ops.py",
         ))
+
+    return findings
+
+
+def check_c24_locale_profiles(root: Path) -> List[Finding]:
+    """
+    C24: Locale profiles under core/locales/ exist, are valid UTF-8, use authentic
+    native orthography (e.g., accented Vietnamese in vi-VN.md), and cover core topics.
+    """
+    findings: List[Finding] = []
+    core_dir = get_core_dir(root)
+    if core_dir is None:
+        return findings
+
+    vi_path = core_dir / "locales" / "vi-VN.md"
+    if not vi_path.is_file():
+        findings.append(Finding(
+            "C24", "error",
+            "Missing Vietnamese locale profile: core/locales/vi-VN.md",
+            "core/locales/vi-VN.md",
+        ))
+        return findings
+
+    try:
+        text = vi_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        findings.append(Finding(
+            "C24", "error",
+            f"Cannot read core/locales/vi-VN.md as UTF-8: {exc}",
+            "core/locales/vi-VN.md",
+        ))
+        return findings
+
+    vi_diacritics = sum(1 for ch in text if ord(ch) > 127 and ch.isalpha())
+    if vi_diacritics < 25:
+        findings.append(Finding(
+            "C24", "error",
+            f"core/locales/vi-VN.md must use authentic accented Vietnamese orthography "
+            f"(found {vi_diacritics} accented letters, require >= 25)",
+            "core/locales/vi-VN.md",
+        ))
+
+    low = text.lower()
+    for required_topic in ("pronoun", "sino-vietnamese", "anti-translatorese", "typography"):
+        if required_topic not in low:
+            findings.append(Finding(
+                "C24", "error",
+                f"core/locales/vi-VN.md missing required section topic: {required_topic}",
+                "core/locales/vi-VN.md",
+            ))
 
     return findings
 
@@ -1529,6 +1592,7 @@ def run_all_checks(root: Path, line_budget: int, duplication_threshold: int, rel
     findings.extend(check_c21_d_research_module(root))
     findings.extend(check_c22_shared_glossary_memory(root))
     findings.extend(check_c23_book_ops_cli(root))
+    findings.extend(check_c24_locale_profiles(root))
 
     return findings
 

@@ -45,3 +45,12 @@
 ### Cultural References
 
 ### Notes
+
+---
+
+## Golden Voice Calibration Sample
+
+### Source Excerpt (300-500 words)
+
+### Approved Target Voice Anchor
+

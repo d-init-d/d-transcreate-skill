@@ -46,13 +46,14 @@ The build stages files atomically and validates the destination after install (d
 
 ## Zero-Config Book Mode (`scripts/book_ops.py`)
 
-For multi-chapter books and long manuals (`.pdf`, `.epub`, `.md`, `.txt`, `.html`), `scripts/book_ops.py` automates workspace initialization, `.pdf` -> `.txt`/`.epub` conversion, Layout-Preserving EPUB Mode (`.epub` input -> `.epub` output keeps original CSS, fonts, images, cover art, and XHTML DOM wrappers/classes intact), chapter/paragraph-safe scanning, two-tier glossary sync, deterministic verification, and final assembly into clean `.txt`, `.epub`, or `.md`:
+For multi-chapter books and long manuals (`.pdf`, `.epub`, `.md`, `.txt`, `.html`), `scripts/book_ops.py` automates workspace initialization, `.pdf` -> `.txt`/`.epub` conversion (with dynamic header stripping and footnote detachment), Anchor-Locked Layout-Preserving EPUB Mode (`.epub` input -> `.epub` output locks `<!-- @bN -->` DOM blocks and retains original CSS, fonts, images, cover art, inline footnote links, and XHTML containers even when paragraphs split), whole-book entity mining (`mine-terms`), scoped subagent packet bundling (`bundle-chunk`), domain-filtered two-tier glossary sync, deep verification (language-pair parity, URL/number formal-data, CJK script-leakage, Vietnamese locale linting, dossier check), and final assembly into clean `.txt`, `.epub`, or `.md`:
 
 ```bash
-python scripts/book_ops.py init --source <book_path> --target-lang vi --workspace <dir>
+python scripts/book_ops.py init --source <book_path> --target-lang vi --workspace <dir> [--domain fiction]
 python scripts/book_ops.py scan --source <book_path> --workspace <dir> --max-words 1500
-python scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang vi
-python scripts/book_ops.py verify --workspace <dir>
+python scripts/book_ops.py sync-glossary --workspace <dir> --seed --target-lang vi --filter-to-source
+python scripts/book_ops.py bundle-chunk --workspace <dir> --chunk <chunk_id> --role chunk-translator
+python scripts/book_ops.py verify --workspace <dir> --require-dossier --enforce-glossary
 python scripts/book_ops.py merge --workspace <dir> --out <translated_book.epub> --format both
 ```
 
